@@ -61,15 +61,54 @@ static void MX_USART1_UART_Init(void);
 #define NO_PULSE_TIMEOUT_MS 10000
 #define MIN_DIFF_MS  (uint32_t)(60000.0f / MAX_RPM_ALLOWED)
 
+// Bộ lọc trung bình
+#define RPM_FILTER_SIZE   30         // Số mẫu để tính trung bình
+
 volatile float rpm = 0.0f;
+volatile int rpm_int = 0;            // RPM dạng số nguyên
 volatile uint8_t first_time = 1;
 volatile uint32_t last_ms = 0;
 volatile uint32_t last_capture_time = 0;
 
+// Mảng lưu trữ các giá trị RPM để tính trung bình
+volatile float rpm_buffer[RPM_FILTER_SIZE] = {0};
+volatile uint8_t rpm_buffer_index = 0;
+volatile uint8_t rpm_buffer_full = 0;
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
+/* USER CODE END 0 */
+
+// Hàm tính trung bình RPM
+float calculate_average_rpm(void) {
+    float sum = 0.0f;
+    uint8_t count = rpm_buffer_full ? RPM_FILTER_SIZE : rpm_buffer_index;
+    
+    if (count == 0) return 0.0f;
+    
+    for (uint8_t i = 0; i < count; i++) {
+        sum += rpm_buffer[i];
+    }
+    
+    return sum / count;
+}
+
+// Hàm thêm giá trị RPM vào buffer
+void add_rpm_to_buffer(float new_rpm) {
+    rpm_buffer[rpm_buffer_index] = new_rpm;
+    rpm_buffer_index++;
+    
+    if (rpm_buffer_index >= RPM_FILTER_SIZE) {
+        rpm_buffer_index = 0;
+        rpm_buffer_full = 1;
+    }
+    
+    // Tính RPM trung bình
+    rpm = calculate_average_rpm();
+    rpm_int = (int)(rpm + 0.5f);  // Làm tròn đến số nguyên gần nhất
+}
+
 #ifdef __GNUC__
 int __io_putchar(int ch)
 #else
@@ -98,10 +137,12 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
 		}
 
 		if (diff_ms > 0) {
-			// ENC_PPR = 1 -> rpm = 60000 / diff_ms
-			rpm = 60000.0f / (float) diff_ms;
+			// Tính RPM tức thời
+			float instant_rpm = 60000.0f / (float) diff_ms;
+			// Thêm vào buffer và tính trung bình
+			add_rpm_to_buffer(instant_rpm);
 		} else {
-			rpm = 0.0f;
+			add_rpm_to_buffer(0.0f);
 		}
 
 		last_capture_time = now_ms;
@@ -149,11 +190,18 @@ int main(void) {
 	while (1) {
 		uint32_t now = HAL_GetTick();
 		if ((now - last_capture_time) > NO_PULSE_TIMEOUT_MS) {
+			// Reset buffer khi không có tín hiệu
+			for (uint8_t i = 0; i < RPM_FILTER_SIZE; i++) {
+				rpm_buffer[i] = 0.0f;
+			}
+			rpm_buffer_index = 0;
+			rpm_buffer_full = 0;
 			rpm = 0.0f;
-			first_time = 1;     // để lần có xung mới lại “mồi” lại mốc đo
+			rpm_int = 0;
+			first_time = 1;     // để lần có xung mới lại "mồi" lại mốc đo
 		}
 
-		printf("RPM: %.2f\r\n", rpm);
+		printf("RPM: %.2f | RPM_INT: %d\r\n", rpm, rpm_int);
 		HAL_Delay(200);
 		/* USER CODE END WHILE */
 
