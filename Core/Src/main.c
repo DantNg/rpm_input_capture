@@ -87,16 +87,16 @@ volatile uint8_t rpm_buffer_full = 0;
 
 
 float calculate_average_rpm(void) {
+    if (!rpm_buffer_full) {
+        if (rpm_buffer_index == 0) return 0.0f;
+        return rpm_buffer[rpm_buffer_index - 1];
+    }
     float sum = 0.0f;
-    uint8_t count = rpm_buffer_full ? RPM_FILTER_SIZE : rpm_buffer_index;
-    
-    if (count == 0) return 0.0f;
-    
-    for (uint8_t i = 0; i < count; i++) {
+    for (uint8_t i = 0; i < RPM_FILTER_SIZE; i++) {
         sum += rpm_buffer[i];
     }
     
-    return sum / count;
+    return sum / RPM_FILTER_SIZE;
 }
 
 float calculate_speed_m_per_min(float rpm_value, float diameter_mm) {
@@ -207,7 +207,7 @@ int main(void) {
 		rpm_int = 0;
 		speed_m_per_min = 0.0f;
 		speed_m_per_min_int = 0;
-		first_time = 1;     // để lần có xung mới lại "mồi" lại mốc đo
+		first_time = 1;     
 		}
 
 		printf("RPM: %.2f | RPM_INT: %d | Speed: %.2f m/min | Speed_INT: %d m/min\r\n", 
