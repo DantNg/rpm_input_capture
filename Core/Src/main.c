@@ -62,10 +62,15 @@ static void MX_USART1_UART_Init(void);
 #define MIN_DIFF_MS  (uint32_t)(60000.0f / MAX_RPM_ALLOWED)
 
 // Bộ lọc trung bình
-#define RPM_FILTER_SIZE   30         // Số mẫu để tính trung bình
+#define RPM_FILTER_SIZE   100       
+
+// Thông số đường kính (mm)
+#define DIA           100.0f     // Đường kính 100mm 
 
 volatile float rpm = 0.0f;
 volatile int rpm_int = 0;            // RPM dạng số nguyên
+volatile float speed_m_per_min = 0.0f;  // Tốc độ m/min
+volatile int speed_m_per_min_int = 0;   // Tốc độ m/min dạng số nguyên
 volatile uint8_t first_time = 1;
 volatile uint32_t last_ms = 0;
 volatile uint32_t last_capture_time = 0;
@@ -80,7 +85,7 @@ volatile uint8_t rpm_buffer_full = 0;
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE END 0 */
 
-// Hàm tính trung bình RPM
+
 float calculate_average_rpm(void) {
     float sum = 0.0f;
     uint8_t count = rpm_buffer_full ? RPM_FILTER_SIZE : rpm_buffer_index;
@@ -94,7 +99,10 @@ float calculate_average_rpm(void) {
     return sum / count;
 }
 
-// Hàm thêm giá trị RPM vào buffer
+float calculate_speed_m_per_min(float rpm_value, float diameter_mm) {
+    return (3.14159265359f * diameter_mm * rpm_value) / 1000.0f;
+}
+
 void add_rpm_to_buffer(float new_rpm) {
     rpm_buffer[rpm_buffer_index] = new_rpm;
     rpm_buffer_index++;
@@ -104,9 +112,11 @@ void add_rpm_to_buffer(float new_rpm) {
         rpm_buffer_full = 1;
     }
     
-    // Tính RPM trung bình
     rpm = calculate_average_rpm();
-    rpm_int = (int)(rpm + 0.5f);  // Làm tròn đến số nguyên gần nhất
+    rpm_int = (int)(rpm + 0.5f);
+    
+    speed_m_per_min = calculate_speed_m_per_min(rpm, DIA);
+    speed_m_per_min_int = (int)(speed_m_per_min + 0.5f);
 }
 
 #ifdef __GNUC__
@@ -129,17 +139,14 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
 		}
 
 		uint32_t diff_ms = now_ms - last_ms;
-		last_ms = now_ms;  // cập nhật mốc cho lần sau
+		last_ms = now_ms;  
 
-		// Lọc xung nghi nhiễu
 		if (diff_ms < MIN_DIFF_MS) {
 			return;
 		}
 
 		if (diff_ms > 0) {
-			// Tính RPM tức thời
 			float instant_rpm = 60000.0f / (float) diff_ms;
-			// Thêm vào buffer và tính trung bình
 			add_rpm_to_buffer(instant_rpm);
 		} else {
 			add_rpm_to_buffer(0.0f);
@@ -194,14 +201,17 @@ int main(void) {
 			for (uint8_t i = 0; i < RPM_FILTER_SIZE; i++) {
 				rpm_buffer[i] = 0.0f;
 			}
-			rpm_buffer_index = 0;
-			rpm_buffer_full = 0;
-			rpm = 0.0f;
-			rpm_int = 0;
-			first_time = 1;     // để lần có xung mới lại "mồi" lại mốc đo
+		rpm_buffer_index = 0;
+		rpm_buffer_full = 0;
+		rpm = 0.0f;
+		rpm_int = 0;
+		speed_m_per_min = 0.0f;
+		speed_m_per_min_int = 0;
+		first_time = 1;     // để lần có xung mới lại "mồi" lại mốc đo
 		}
 
-		printf("RPM: %.2f | RPM_INT: %d\r\n", rpm, rpm_int);
+		printf("RPM: %.2f | RPM_INT: %d | Speed: %.2f m/min | Speed_INT: %d m/min\r\n", 
+		       rpm, rpm_int, speed_m_per_min, speed_m_per_min_int);
 		HAL_Delay(200);
 		/* USER CODE END WHILE */
 
