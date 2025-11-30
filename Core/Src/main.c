@@ -59,22 +59,9 @@ static void MX_USART1_UART_Init(void);
 #define ENC_PPR           1.0f       // 1 xung / vòng
 #define MAX_RPM_ALLOWED   10000.0f
 #define NO_PULSE_TIMEOUT_MS 10000
-// Tần số tick TIM2: 72 MHz / (Prescaler=72) = 1 MHz => 1 tick = 1 us
-#define TIM2_TICK_HZ      1000000UL
-// Ngưỡng tối thiểu số tick giữa 2 xung để loại nhiễu (theo MAX_RPM_ALLOWED và ENC_PPR)
-#define MIN_DIFF_TICKS  (uint32_t)((60.0f * (float)TIM2_TICK_HZ) / (MAX_RPM_ALLOWED * ENC_PPR))
-
-// Hysteresis (deadband) cho RPM dạng số nguyên để tránh nhảy 299/300
-// Đơn vị: RPM. Ví dụ 0.4 nghĩa là cần vượt quá 0.4 RPM so với ngưỡng 0.5 mới đổi số.
-#define RPM_INT_HYST      0.4f
-
-// Thông số đường kính (mm)
-#define DIA           100.0f     // Đường kính 100mm 
+#define MIN_DIFF_MS  (uint32_t)(60000.0f / MAX_RPM_ALLOWED)
 
 volatile float rpm = 0.0f;
-volatile int rpm_int = 0;            // RPM dạng số nguyên
-volatile float speed_m_per_min = 0.0f;  // Tốc độ m/min
-volatile int speed_m_per_min_int = 0;   // Tốc độ m/min dạng số nguyên
 volatile uint8_t first_time = 1;
 volatile uint32_t last_ms = 0;
 volatile uint32_t last_capture_time = 0;
@@ -82,39 +69,7 @@ volatile uint32_t last_capture_time = 0;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
-/* USER CODE END 0 */
-
-
-float calculate_speed_m_per_min(float rpm_value, float diameter_mm) {
-    return (3.14159265359f * diameter_mm * rpm_value) / 1000.0f;
-}
-
-// Cập nhật RPM theo giá trị tức thời (không dùng trung bình),
-// áp dụng hysteresis cho số nguyên để chống nhảy 299/300.
-void add_rpm_to_buffer(float new_rpm) {
-	rpm = new_rpm;
-
-	int last = rpm_int;
-	int candidate = (int)(rpm + 0.5f); // làm tròn chuẩn về số gần nhất
-
-	if (candidate != last) {
-		float upper_tr = (float)last + 0.5f + RPM_INT_HYST;
-		float lower_tr = (float)last - 0.5f - RPM_INT_HYST;
-
-		if ((candidate > last && rpm >= upper_tr) ||
-			(candidate < last && rpm <= lower_tr)) {
-			rpm_int = candidate;
-		} else {
-			rpm_int = last; // giữ nguyên để tránh nhấp nháy
-		}
-	} else {
-		rpm_int = last;
-	}
-
-	speed_m_per_min = calculate_speed_m_per_min(rpm, DIA);
-	speed_m_per_min_int = (int)(speed_m_per_min + 0.5f);
-}
-
+/* USER CODE BEGIN 0 */
 #ifdef __GNUC__
 int __io_putchar(int ch)
 #else
@@ -126,31 +81,30 @@ int fputc(int ch, FILE *f)
 }
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
 	if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
-		uint32_t now_ticks = __HAL_TIM_GET_COMPARE(htim, TIM_CHANNEL_1);
+		uint32_t now_ms = HAL_GetTick();
 
 		if (first_time) {
-			last_ms = now_ticks;
+			last_ms = now_ms;
 			first_time = 0;
 			return;
 		}
 
-		uint32_t diff_ticks;
-		if (now_ticks >= last_ms) {
-			diff_ticks = now_ticks - last_ms;
-		} else {
-			diff_ticks = (htim->Init.Period + 1u) - last_ms + now_ticks; // xử lý tràn 16-bit
-		}
-		last_ms = now_ticks;
+		uint32_t diff_ms = now_ms - last_ms;
+		last_ms = now_ms;  // cập nhật mốc cho lần sau
 
-		if (diff_ticks < MIN_DIFF_TICKS) {
+		// Lọc xung nghi nhiễu
+		if (diff_ms < MIN_DIFF_MS) {
 			return;
 		}
 
-		float instant_rpm = (60.0f * (float)TIM2_TICK_HZ) / ((float)diff_ticks * ENC_PPR);
-		add_rpm_to_buffer(instant_rpm);
+		if (diff_ms > 0) {
+			// ENC_PPR = 1 -> rpm = 60000 / diff_ms
+			rpm = 60000.0f / (float) diff_ms;
+		} else {
+			rpm = 0.0f;
+		}
 
-		// Giữ đơn vị ms cho kiểm tra timeout ở vòng lặp chính
-		last_capture_time = HAL_GetTick();
+		last_capture_time = now_ms;
 	}
 }
 /* USER CODE END 0 */
@@ -195,16 +149,11 @@ int main(void) {
 	while (1) {
 		uint32_t now = HAL_GetTick();
 		if ((now - last_capture_time) > NO_PULSE_TIMEOUT_MS) {
-			// Không có tín hiệu: đưa về 0 và chờ xung mới
 			rpm = 0.0f;
-			rpm_int = 0;
-			speed_m_per_min = 0.0f;
-			speed_m_per_min_int = 0;
-			first_time = 1;     
+			first_time = 1;     // để lần có xung mới lại “mồi” lại mốc đo
 		}
 
-		printf("RPM: %.2f | RPM_INT: %d | Speed: %.2f m/min | Speed_INT: %d m/min\r\n", 
-		       rpm, rpm_int, speed_m_per_min, speed_m_per_min_int);
+		printf("RPM: %.2f\r\n", rpm);
 		HAL_Delay(200);
 		/* USER CODE END WHILE */
 
