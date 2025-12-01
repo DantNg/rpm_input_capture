@@ -116,10 +116,10 @@ void add_rpm_to_buffer(float new_rpm) {
         rpm_buffer_full = 1;
     }
     
-    rpm = calculate_average_rpm();
+	rpm = new_rpm;
 	{
 		int last = rpm_int;                     
-		int candidate = (int)(rpm + 0.5f);      
+		int candidate = (int)(rpm + 1);      
 
 		if (candidate != last) {
 			float upper_tr = (float)last + 0.5f + RPM_INT_HYST;
