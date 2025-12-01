@@ -64,6 +64,10 @@ static void MX_USART1_UART_Init(void);
 // Bộ lọc trung bình
 #define RPM_FILTER_SIZE   1 
 
+// Hysteresis (deadband) cho RPM dạng số nguyên để tránh nhảy 299/300
+// Đơn vị: RPM. Ví dụ 0.4 nghĩa là cần vượt quá 0.4 RPM so với ngưỡng 0.5 mới đổi số.
+#define RPM_INT_HYST      0.4f
+
 // Thông số đường kính (mm)
 #define DIA           100.0f     // Đường kính 100mm 
 
@@ -113,7 +117,24 @@ void add_rpm_to_buffer(float new_rpm) {
     }
     
     rpm = calculate_average_rpm();
-    rpm_int = (int)ceil(rpm + 0.5f);
+	{
+		int last = rpm_int;                     
+		int candidate = (int)(rpm + 0.5f);      
+
+		if (candidate != last) {
+			float upper_tr = (float)last + 0.5f + RPM_INT_HYST;
+			float lower_tr = (float)last - 0.5f - RPM_INT_HYST;
+
+			if ((candidate > last && rpm >= upper_tr) ||
+				(candidate < last && rpm <= lower_tr)) {
+				rpm_int = candidate;            
+			} else {
+				rpm_int = last;
+			}
+		} else {
+			rpm_int = last; 
+		}
+	}
     
     speed_m_per_min = calculate_speed_m_per_min(rpm, DIA);
     speed_m_per_min_int = (int)(speed_m_per_min + 0.5f);
