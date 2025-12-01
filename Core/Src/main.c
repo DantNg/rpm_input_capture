@@ -60,17 +60,15 @@ static void MX_USART1_UART_Init(void);
 #define MAX_RPM_ALLOWED   10000.0f
 #define NO_PULSE_TIMEOUT_MS 10000
 #define MIN_DIFF_MS  (uint32_t)(60000.0f / MAX_RPM_ALLOWED)
-// TIM2 clock: APB1 timer clock = 72 MHz, Prescaler = 72-1 -> counter = 1 MHz (1 tick = 1 us)
-#define TIM2_COUNTER_HZ   1000000UL
-#define MIN_DIFF_TICKS    (MIN_DIFF_MS * 1000UL)
+#define TIM2_COUNTER_HZ   10000UL
+#define MIN_DIFF_TICKS    ((uint32_t)((MIN_DIFF_MS * (uint32_t)TIM2_COUNTER_HZ) / 1000UL))
 
 volatile float rpm = 0.0f;
+volatile float rpm_int = 0.0f;
 volatile uint8_t first_time = 1;
 volatile uint32_t last_ms = 0;
 volatile uint32_t last_capture_time = 0;
 volatile uint32_t last_ccr1 = 0;
-volatile uint32_t tim2_ovf = 0;
-volatile uint32_t last_ovf = 0;
 
 /* USER CODE END PFP */
 
@@ -89,53 +87,33 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
 	if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
 		uint32_t now_ms = HAL_GetTick();
 		uint32_t ccr = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
-		uint32_t ovf = tim2_ovf; // snapshot overflow counter
 
 		if (first_time) {
 			last_ccr1 = ccr;
-			last_ovf = ovf;
 			first_time = 0;
 			last_capture_time = now_ms;
 			return;
 		}
 
-		// Tính khoảng thời gian giữa 2 cạnh bằng timer tick (1 tick = 1 us)
-		uint32_t ovf_diff = ovf - last_ovf;
-		uint32_t ticks_mod;
+		uint32_t delta_ticks;
 		if (ccr >= last_ccr1) {
-			ticks_mod = ccr - last_ccr1;
+			delta_ticks = ccr - last_ccr1;
 		} else {
-			ticks_mod = (htim2.Init.Period + 1U) - last_ccr1 + ccr;
+			delta_ticks = (htim2.Init.Period + 1U) - last_ccr1 + ccr;
 		}
-
-		// Nếu overflow xảy ra rất sát thời điểm capture, có thể ovf chưa kịp tăng
-		if ((ovf_diff == 0U) && (ccr < last_ccr1)) {
-			ovf_diff = 1U;
-		}
-
-		uint32_t delta_ticks = ovf_diff * (htim2.Init.Period + 1U) + ticks_mod;
 		last_ccr1 = ccr;
-		last_ovf = ovf;
 
-		// Lọc xung nghi nhiễu dựa trên ngưỡng tối thiểu
 		if (delta_ticks < MIN_DIFF_TICKS) {
 			return;
 		}
 
 		if (delta_ticks > 0U) {
-			// rpm = 60 * Fcnt / (delta_ticks * PPR)
 			rpm = (60.0f * (float)TIM2_COUNTER_HZ) / ((float)delta_ticks * ENC_PPR);
 		} else {
 			rpm = 0.0f;
 		}
-
+		rpm_int = (int)rpm;
 		last_capture_time = now_ms;
-	}
-}
-
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-	if (htim->Instance == TIM2) {
-		tim2_ovf++;
 	}
 }
 /* USER CODE END 0 */
@@ -172,7 +150,6 @@ int main(void) {
 	MX_USART1_UART_Init();
 	/* USER CODE BEGIN 2 */
 //  HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
-	HAL_TIM_Base_Start_IT(&htim2);           // enable update IRQ for overflow counting
 	HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
 	/* USER CODE END 2 */
 
@@ -249,7 +226,7 @@ static void MX_TIM2_Init(void) {
 
 	/* USER CODE END TIM2_Init 1 */
 	htim2.Instance = TIM2;
-	htim2.Init.Prescaler = 72 - 1;
+	htim2.Init.Prescaler = 7199; // 10 kHz counter
 	htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
 	htim2.Init.Period = 65535;
 	htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
