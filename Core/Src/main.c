@@ -60,11 +60,17 @@ static void MX_USART1_UART_Init(void);
 #define MAX_RPM_ALLOWED   10000.0f
 #define NO_PULSE_TIMEOUT_MS 10000
 #define MIN_DIFF_MS  (uint32_t)(60000.0f / MAX_RPM_ALLOWED)
+// TIM2 counter frequency derived from prescaler (PSC=72-1 -> 1 MHz)
+#define TIM2_COUNTER_HZ   1000000UL
 
 volatile float rpm = 0.0f;
-volatile uint8_t first_time = 1;
-volatile uint32_t last_ms = 0;
+volatile uint8_t first_time = 1; // used for SysTick method (kept for timeout reset)
+volatile uint32_t last_ms = 0;   // used for SysTick method
 volatile uint32_t last_capture_time = 0;
+volatile uint32_t IC_Val1 = 0;
+volatile uint32_t IC_Val2 = 0;
+volatile uint32_t Difference = 0;
+volatile int Is_First_Captured = 0;
 
 /* USER CODE END PFP */
 
@@ -83,28 +89,29 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
 	if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
 		uint32_t now_ms = HAL_GetTick();
 
-		if (first_time) {
-			last_ms = now_ms;
-			first_time = 0;
+		if (Is_First_Captured == 0) {
+			IC_Val1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+			Is_First_Captured = 1;
+			last_capture_time = now_ms;
 			return;
-		}
-
-		uint32_t diff_ms = now_ms - last_ms;
-		last_ms = now_ms;  // cập nhật mốc cho lần sau
-
-		// Lọc xung nghi nhiễu
-		if (diff_ms < MIN_DIFF_MS) {
-			return;
-		}
-
-		if (diff_ms > 0) {
-			// ENC_PPR = 1 -> rpm = 60000 / diff_ms
-			rpm = 60000.0f / (float) diff_ms;
 		} else {
-			rpm = 0.0f;
-		}
+			IC_Val2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
 
-		last_capture_time = now_ms;
+			if (IC_Val2 >= IC_Val1) {
+				Difference = IC_Val2 - IC_Val1;
+			} else {
+				Difference = (htim2.Init.Period + 1U) - IC_Val1 + IC_Val2;
+			}
+
+			// Reject unrealistically small periods (noise)
+			if (Difference >= (uint32_t)(MIN_DIFF_MS * (TIM2_COUNTER_HZ / 1000UL))) {
+				rpm = (60.0f * (float)TIM2_COUNTER_HZ) / ((float)Difference * ENC_PPR);
+			}
+
+			__HAL_TIM_SET_COUNTER(htim, 0);
+			Is_First_Captured = 0;
+			last_capture_time = now_ms;
+		}
 	}
 }
 /* USER CODE END 0 */
