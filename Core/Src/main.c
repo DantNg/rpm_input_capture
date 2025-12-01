@@ -60,17 +60,15 @@ static void MX_USART1_UART_Init(void);
 #define MAX_RPM_ALLOWED   10000.0f
 #define NO_PULSE_TIMEOUT_MS 10000
 #define MIN_DIFF_MS  (uint32_t)(60000.0f / MAX_RPM_ALLOWED)
-// TIM2 counter frequency derived from prescaler (PSC=72-1 -> 1 MHz)
+// TIM2 clock: APB1 timer clock = 72 MHz, Prescaler = 72-1 -> counter = 1 MHz (1 tick = 1 us)
 #define TIM2_COUNTER_HZ   1000000UL
+#define MIN_DIFF_TICKS    (MIN_DIFF_MS * 1000UL)
 
 volatile float rpm = 0.0f;
-volatile uint8_t first_time = 1; // used for SysTick method (kept for timeout reset)
-volatile uint32_t last_ms = 0;   // used for SysTick method
+volatile uint8_t first_time = 1;
+volatile uint32_t last_ms = 0;
 volatile uint32_t last_capture_time = 0;
-volatile uint32_t IC_Val1 = 0;
-volatile uint32_t IC_Val2 = 0;
-volatile uint32_t Difference = 0;
-volatile int Is_First_Captured = 0;
+volatile uint32_t last_ccr1 = 0;
 
 /* USER CODE END PFP */
 
@@ -88,30 +86,38 @@ int fputc(int ch, FILE *f)
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
 	if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
 		uint32_t now_ms = HAL_GetTick();
+		uint32_t ccr = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
 
-		if (Is_First_Captured == 0) {
-			IC_Val1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
-			Is_First_Captured = 1;
+		if (first_time) {
+			last_ccr1 = ccr;
+			first_time = 0;
 			last_capture_time = now_ms;
 			return;
-		} else {
-			IC_Val2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
-
-			if (IC_Val2 >= IC_Val1) {
-				Difference = IC_Val2 - IC_Val1;
-			} else {
-				Difference = (htim2.Init.Period + 1U) - IC_Val1 + IC_Val2;
-			}
-
-			// Reject unrealistically small periods (noise)
-			if (Difference >= (uint32_t)(MIN_DIFF_MS * (TIM2_COUNTER_HZ / 1000UL))) {
-				rpm = (60.0f * (float)TIM2_COUNTER_HZ) / ((float)Difference * ENC_PPR);
-			}
-
-			__HAL_TIM_SET_COUNTER(htim, 0);
-			Is_First_Captured = 0;
-			last_capture_time = now_ms;
 		}
+
+		// Tính khoảng thời gian giữa 2 cạnh bằng timer tick (1 tick = 1 us)
+		uint32_t delta_ticks;
+		if (ccr >= last_ccr1) {
+			delta_ticks = ccr - last_ccr1;
+		} else {
+			// xử lý tràn counter: Period = 65535 -> modulo 65536
+			delta_ticks = (htim2.Init.Period + 1U) - last_ccr1 + ccr;
+		}
+		last_ccr1 = ccr;
+
+		// Lọc xung nghi nhiễu dựa trên ngưỡng tối thiểu
+		if (delta_ticks < MIN_DIFF_TICKS) {
+			return;
+		}
+
+		if (delta_ticks > 0U) {
+			// rpm = 60 * Fcnt / (delta_ticks * PPR)
+			rpm = (60.0f * (float)TIM2_COUNTER_HZ) / ((float)delta_ticks * ENC_PPR);
+		} else {
+			rpm = 0.0f;
+		}
+
+		last_capture_time = now_ms;
 	}
 }
 /* USER CODE END 0 */
