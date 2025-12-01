@@ -62,8 +62,8 @@ static void MX_USART1_UART_Init(void);
 #define MIN_DIFF_MS  (uint32_t)(60000.0f / MAX_RPM_ALLOWED)
 #define TIM2_COUNTER_HZ   10000UL
 #define MIN_DIFF_TICKS    ((uint32_t)((MIN_DIFF_MS * (uint32_t)TIM2_COUNTER_HZ) / 1000UL))
-// Smooth display by averaging period over last N pulses
-#define AVG_N 8
+// Smooth display by averaging period over last N pulses (smaller = faster response)
+#define AVG_N 3
 
 volatile float rpm = 0.0f;
 volatile float rpm_int = 0.0f;
@@ -114,7 +114,6 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
 		}
 
 		if (delta_ticks > 0U) {
-			// update moving average of period ticks
 			if (dt_count < AVG_N) {
 				dt_count++;
 			}
@@ -179,7 +178,7 @@ int main(void) {
 			first_time = 1;     // để lần có xung mới lại “mồi” lại mốc đo
 		}
 
-		printf("RPM: %.2f\r\n", rpm);
+		printf("RPM: %.1f\r\n", rpm);
 		HAL_Delay(200);
 		/* USER CODE END WHILE */
 
