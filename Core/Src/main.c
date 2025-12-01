@@ -138,12 +138,8 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
 			return;
 		}
 
-		if (diff_ms > 0) {
-			float instant_rpm = 60000.0f / (float) diff_ms;
-			add_rpm_to_buffer(instant_rpm);
-		} else {
-			add_rpm_to_buffer(0.0f);
-		}
+		float instant_rpm = 60000.0f / (float)diff_ms;
+		add_rpm_to_buffer(instant_rpm);
 
 		last_capture_time = now_ms;
 	}
