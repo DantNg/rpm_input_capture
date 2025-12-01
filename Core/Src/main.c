@@ -61,9 +61,6 @@ static void MX_USART1_UART_Init(void);
 #define NO_PULSE_TIMEOUT_MS 10000
 #define MIN_DIFF_MS  (uint32_t)(60000.0f / MAX_RPM_ALLOWED)
 
-// Bộ lọc trung bình
-#define RPM_FILTER_SIZE   1 
-
 // Hysteresis (deadband) cho RPM dạng số nguyên để tránh nhảy 299/300
 // Đơn vị: RPM. Ví dụ 0.4 nghĩa là cần vượt quá 0.4 RPM so với ngưỡng 0.5 mới đổi số.
 #define RPM_INT_HYST      0.4f
@@ -79,65 +76,40 @@ volatile uint8_t first_time = 1;
 volatile uint32_t last_ms = 0;
 volatile uint32_t last_capture_time = 0;
 
-// Mảng lưu trữ các giá trị RPM để tính trung bình
-volatile float rpm_buffer[RPM_FILTER_SIZE] = {0};
-volatile uint8_t rpm_buffer_index = 0;
-volatile uint8_t rpm_buffer_full = 0;
-
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE END 0 */
 
 
-float calculate_average_rpm(void) {
-    if (!rpm_buffer_full) {
-        if (rpm_buffer_index == 0) return 0.0f;
-        return rpm_buffer[rpm_buffer_index - 1];
-    }
-    float sum = 0.0f;
-    for (uint8_t i = 0; i < RPM_FILTER_SIZE; i++) {
-        sum += rpm_buffer[i];
-    }
-    
-    return sum / RPM_FILTER_SIZE;
-}
-
 float calculate_speed_m_per_min(float rpm_value, float diameter_mm) {
     return (3.14159265359f * diameter_mm * rpm_value) / 1000.0f;
 }
 
+// Cập nhật RPM theo giá trị tức thời (không dùng trung bình),
+// áp dụng hysteresis cho số nguyên để chống nhảy 299/300.
 void add_rpm_to_buffer(float new_rpm) {
-    rpm_buffer[rpm_buffer_index] = new_rpm;
-    rpm_buffer_index++;
-    
-    if (rpm_buffer_index >= RPM_FILTER_SIZE) {
-        rpm_buffer_index = 0;
-        rpm_buffer_full = 1;
-    }
-    
 	rpm = new_rpm;
-	{
-		int last = rpm_int;                     
-		int candidate = (int)(rpm + 1);      
 
-		if (candidate != last) {
-			float upper_tr = (float)last + 0.5f + RPM_INT_HYST;
-			float lower_tr = (float)last - 0.5f - RPM_INT_HYST;
+	int last = rpm_int;
+	int candidate = (int)(rpm + 0.5f); // làm tròn chuẩn về số gần nhất
 
-			if ((candidate > last && rpm >= upper_tr) ||
-				(candidate < last && rpm <= lower_tr)) {
-				rpm_int = candidate;            
-			} else {
-				rpm_int = last;
-			}
+	if (candidate != last) {
+		float upper_tr = (float)last + 0.5f + RPM_INT_HYST;
+		float lower_tr = (float)last - 0.5f - RPM_INT_HYST;
+
+		if ((candidate > last && rpm >= upper_tr) ||
+			(candidate < last && rpm <= lower_tr)) {
+			rpm_int = candidate;
 		} else {
-			rpm_int = last; 
+			rpm_int = last; // giữ nguyên để tránh nhấp nháy
 		}
+	} else {
+		rpm_int = last;
 	}
-    
-    speed_m_per_min = calculate_speed_m_per_min(rpm, DIA);
-    speed_m_per_min_int = (int)(speed_m_per_min + 0.5f);
+
+	speed_m_per_min = calculate_speed_m_per_min(rpm, DIA);
+	speed_m_per_min_int = (int)(speed_m_per_min + 0.5f);
 }
 
 #ifdef __GNUC__
@@ -151,7 +123,7 @@ int fputc(int ch, FILE *f)
 }
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
 	if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
-		uint32_t now_ms = HAL_GetTick();
+		uint32_t now_ms = __HAL_TIM_GET_COMPARE(htim, TIM_CHANNEL_1);
 
 		if (first_time) {
 			last_ms = now_ms;
@@ -218,17 +190,12 @@ int main(void) {
 	while (1) {
 		uint32_t now = HAL_GetTick();
 		if ((now - last_capture_time) > NO_PULSE_TIMEOUT_MS) {
-			// Reset buffer khi không có tín hiệu
-			for (uint8_t i = 0; i < RPM_FILTER_SIZE; i++) {
-				rpm_buffer[i] = 0.0f;
-			}
-		rpm_buffer_index = 0;
-		rpm_buffer_full = 0;
-		rpm = 0.0f;
-		rpm_int = 0;
-		speed_m_per_min = 0.0f;
-		speed_m_per_min_int = 0;
-		first_time = 1;     
+			// Không có tín hiệu: đưa về 0 và chờ xung mới
+			rpm = 0.0f;
+			rpm_int = 0;
+			speed_m_per_min = 0.0f;
+			speed_m_per_min_int = 0;
+			first_time = 1;     
 		}
 
 		printf("RPM: %.2f | RPM_INT: %d | Speed: %.2f m/min | Speed_INT: %d m/min\r\n", 
