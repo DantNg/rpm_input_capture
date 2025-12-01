@@ -62,7 +62,7 @@ static void MX_USART1_UART_Init(void);
 #define MIN_DIFF_MS  (uint32_t)(60000.0f / MAX_RPM_ALLOWED)
 
 // Bộ lọc trung bình
-#define RPM_FILTER_SIZE   10      
+#define RPM_FILTER_SIZE   1 
 
 // Thông số đường kính (mm)
 #define DIA           100.0f     // Đường kính 100mm 
@@ -113,7 +113,7 @@ void add_rpm_to_buffer(float new_rpm) {
     }
     
     rpm = calculate_average_rpm();
-    rpm_int = (int)(rpm + 0.5f);
+    rpm_int = (int)ceil(rpm + 0.5f);
     
     speed_m_per_min = calculate_speed_m_per_min(rpm, DIA);
     speed_m_per_min_int = (int)(speed_m_per_min + 0.5f);
