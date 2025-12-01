@@ -62,6 +62,8 @@ static void MX_USART1_UART_Init(void);
 #define MIN_DIFF_MS  (uint32_t)(60000.0f / MAX_RPM_ALLOWED)
 #define TIM2_COUNTER_HZ   10000UL
 #define MIN_DIFF_TICKS    ((uint32_t)((MIN_DIFF_MS * (uint32_t)TIM2_COUNTER_HZ) / 1000UL))
+// Smooth display by averaging period over last N pulses
+#define AVG_N 8
 
 volatile float rpm = 0.0f;
 volatile float rpm_int = 0.0f;
@@ -69,6 +71,10 @@ volatile uint8_t first_time = 1;
 volatile uint32_t last_ms = 0;
 volatile uint32_t last_capture_time = 0;
 volatile uint32_t last_ccr1 = 0;
+static uint32_t dt_buf[AVG_N] = {0};
+static uint32_t dt_sum = 0;
+static uint8_t dt_idx = 0;
+static uint8_t dt_count = 0;
 
 /* USER CODE END PFP */
 
@@ -108,7 +114,18 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
 		}
 
 		if (delta_ticks > 0U) {
-			rpm = (60.0f * (float)TIM2_COUNTER_HZ) / ((float)delta_ticks * ENC_PPR);
+			// update moving average of period ticks
+			if (dt_count < AVG_N) {
+				dt_count++;
+			}
+			dt_sum -= dt_buf[dt_idx];
+			dt_buf[dt_idx] = delta_ticks;
+			dt_sum += delta_ticks;
+			dt_idx++;
+			if (dt_idx >= AVG_N) dt_idx = 0;
+
+			uint32_t avg_ticks = dt_sum / (dt_count ? dt_count : 1);
+			rpm = (60.0f * (float)TIM2_COUNTER_HZ) / ((float)avg_ticks * ENC_PPR);
 		} else {
 			rpm = 0.0f;
 		}
