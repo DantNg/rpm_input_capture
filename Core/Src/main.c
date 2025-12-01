@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <math.h>
 
 /* USER CODE END Includes */
 
@@ -99,6 +100,26 @@ float calculate_average_rpm(void) {
     return sum / RPM_FILTER_SIZE;
 }
 
+// Adaptive exponential moving average filter
+// Nhanh phản ứng khi thay đổi lớn, giữ ổn định khi nhiễu nhỏ
+static float adaptive_filtered_rpm(float new_rpm) {
+	static float prev = 0.0f;
+	static uint8_t initialized = 0;
+	if (!initialized) { prev = new_rpm; initialized = 1; return new_rpm; }
+
+	float diff = fabsf(new_rpm - prev);
+	// Ngưỡng thích nghi: phần trăm của giá trị trước + offset cố định
+	float threshold = prev * 0.10f + 5.0f; // điều chỉnh nếu cần
+
+	const float alpha_fast = 0.65f;  // đáp ứng nhanh khi thay đổi lớn
+	const float alpha_slow = 0.06f;  // làm mượt khi ổn định
+	float alpha = (diff > threshold) ? alpha_fast : alpha_slow;
+
+	float filtered = prev + alpha * (new_rpm - prev);
+	prev = filtered;
+	return filtered;
+}
+
 float calculate_speed_m_per_min(float rpm_value, float diameter_mm) {
     return (3.14159265359f * diameter_mm * rpm_value) / 1000.0f;
 }
@@ -112,10 +133,13 @@ void add_rpm_to_buffer(float new_rpm) {
         rpm_buffer_full = 1;
     }
     
-    rpm = calculate_average_rpm();
+	// Giữ trung bình dài hạn để tham khảo (có thể dùng cho giám sát ổn định)
+	float slow_avg = calculate_average_rpm();
+	// Lọc thích nghi nhanh hơn để hiển thị chính
+	rpm = adaptive_filtered_rpm(new_rpm);
     rpm_int = (int)(rpm + 0.5f);
     
-    speed_m_per_min = calculate_speed_m_per_min(rpm, DIA);
+	speed_m_per_min = calculate_speed_m_per_min(rpm, DIA);
     speed_m_per_min_int = (int)(speed_m_per_min + 0.5f);
 }
 
