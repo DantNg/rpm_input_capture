@@ -59,7 +59,10 @@ static void MX_USART1_UART_Init(void);
 #define ENC_PPR           1.0f       // 1 xung / vòng
 #define MAX_RPM_ALLOWED   10000.0f
 #define NO_PULSE_TIMEOUT_MS 10000
-#define MIN_DIFF_MS  (uint32_t)(60000.0f / MAX_RPM_ALLOWED)
+// Tần số tick TIM2: 72 MHz / (Prescaler=72) = 1 MHz => 1 tick = 1 us
+#define TIM2_TICK_HZ      1000000UL
+// Ngưỡng tối thiểu số tick giữa 2 xung để loại nhiễu (theo MAX_RPM_ALLOWED và ENC_PPR)
+#define MIN_DIFF_TICKS  (uint32_t)((60.0f * (float)TIM2_TICK_HZ) / (MAX_RPM_ALLOWED * ENC_PPR))
 
 // Hysteresis (deadband) cho RPM dạng số nguyên để tránh nhảy 299/300
 // Đơn vị: RPM. Ví dụ 0.4 nghĩa là cần vượt quá 0.4 RPM so với ngưỡng 0.5 mới đổi số.
@@ -123,25 +126,31 @@ int fputc(int ch, FILE *f)
 }
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
 	if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
-		uint32_t now_ms = __HAL_TIM_GET_COMPARE(htim, TIM_CHANNEL_1);
+		uint32_t now_ticks = __HAL_TIM_GET_COMPARE(htim, TIM_CHANNEL_1);
 
 		if (first_time) {
-			last_ms = now_ms;
+			last_ms = now_ticks;
 			first_time = 0;
 			return;
 		}
 
-		uint32_t diff_ms = now_ms - last_ms;
-		last_ms = now_ms;  
+		uint32_t diff_ticks;
+		if (now_ticks >= last_ms) {
+			diff_ticks = now_ticks - last_ms;
+		} else {
+			diff_ticks = (htim->Init.Period + 1u) - last_ms + now_ticks; // xử lý tràn 16-bit
+		}
+		last_ms = now_ticks;
 
-		if (diff_ms < MIN_DIFF_MS) {
+		if (diff_ticks < MIN_DIFF_TICKS) {
 			return;
 		}
 
-		float instant_rpm = 60000.0f / (float)diff_ms;
+		float instant_rpm = (60.0f * (float)TIM2_TICK_HZ) / ((float)diff_ticks * ENC_PPR);
 		add_rpm_to_buffer(instant_rpm);
 
-		last_capture_time = now_ms;
+		// Giữ đơn vị ms cho kiểm tra timeout ở vòng lặp chính
+		last_capture_time = HAL_GetTick();
 	}
 }
 /* USER CODE END 0 */
