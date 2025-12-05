@@ -71,8 +71,15 @@ volatile uint32_t last_ms = 0;   // used for SysTick method
 volatile uint32_t last_capture_time = 0;
 volatile uint16_t IC_Val1 = 0;
 volatile uint16_t IC_Val2 = 0;
-volatile uint16_t Difference = 0;
+volatile uint32_t Difference = 0;
 volatile int Is_First_Captured = 0;
+volatile uint32_t overflow_count = 0;
+volatile uint32_t last_overflow_count = 0;
+// Smoothing filter for display stability
+#define FILTER_SIZE 4
+static float freq_buffer[FILTER_SIZE] = {0};
+static uint8_t filter_idx = 0;
+static uint8_t filter_count = 0;
 
 /* USER CODE END PFP */
 
@@ -97,33 +104,74 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
 	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
 	{
-		if (Is_First_Captured==0) // if the first rising edge is not captured
+		uint32_t now_ms = HAL_GetTick();
+		
+		if (Is_First_Captured==0)
 		{
-			IC_Val1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1); // read the first value
-			Is_First_Captured = 1;  // set the first captured as true
+			IC_Val1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+			last_overflow_count = overflow_count;
+			Is_First_Captured = 1;
+			last_capture_time = now_ms;
 		}
-
-		else   // If the first rising edge is captured, now we will capture the second edge
+		else
 		{
-			IC_Val2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);  // read second value
-
-			if (IC_Val2 > IC_Val1)
+			IC_Val2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+			uint32_t current_ovf = overflow_count;
+			
+			// Calculate total ticks with overflow handling
+			uint32_t overflow_ticks = (current_ovf - last_overflow_count) * 65536UL;
+			uint32_t capture_diff;
+			
+			if (IC_Val2 >= IC_Val1)
 			{
-				Difference = IC_Val2-IC_Val1;
+				capture_diff = IC_Val2 - IC_Val1;
 			}
-
-			else if (IC_Val1 > IC_Val2)
+			else
 			{
-			    Difference = (65536 - IC_Val1) + IC_Val2;  // Đúng cho 16-bit timer
+				// Handle wrap within same overflow period
+				capture_diff = (65536UL - IC_Val1) + IC_Val2;
+				// If no overflow recorded but wrap occurred, count it
+				if (overflow_ticks == 0) {
+					overflow_ticks = 65536UL;
+				}
 			}
-
-			float refClock = TIMCLOCK/(PRESCALAR);
-
-			frequency = (refClock/Difference);
-			rpm = (frequency * 60);
-			__HAL_TIM_SET_COUNTER(htim, 0);  // reset the counter
-			Is_First_Captured = 0; // set it back to false
+			
+			Difference = overflow_ticks + capture_diff;
+			
+			// Calculate frequency if valid
+			if (Difference > 100)  // Filter noise (min ~10kHz with 1MHz counter)
+			{
+				float refClock = TIMCLOCK / (float)PRESCALAR;
+				float freq_raw = refClock / (float)Difference;
+				
+				// Moving average filter for stability
+				if (filter_count < FILTER_SIZE) filter_count++;
+				freq_buffer[filter_idx] = freq_raw;
+				filter_idx = (filter_idx + 1) % FILTER_SIZE;
+				
+				float freq_sum = 0;
+				for (uint8_t i = 0; i < filter_count; i++) {
+					freq_sum += freq_buffer[i];
+				}
+				frequency = freq_sum / filter_count;
+				rpm = frequency * 60.0f;
+			}
+			
+			// Reset for next measurement
+			__HAL_TIM_SET_COUNTER(htim, 0);
+			overflow_count = 0;
+			Is_First_Captured = 0;
+			last_capture_time = now_ms;
 		}
+	}
+}
+
+// Overflow callback for long periods
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	if (htim->Instance == TIM2)
+	{
+		overflow_count++;
 	}
 }
 /* USER CODE END 0 */
@@ -162,6 +210,7 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 //  HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
+	HAL_TIM_Base_Start_IT(&htim2);  // Enable overflow interrupt
 	HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
 	TIM3->CCR1 = 50000/2;
 	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
@@ -173,10 +222,13 @@ int main(void)
 		uint32_t now = HAL_GetTick();
 		if ((now - last_capture_time) > NO_PULSE_TIMEOUT_MS) {
 			rpm = 0.0f;
-			first_time = 1;     // để lần có xung mới lại “mồi” lại mốc đo
+			frequency = 0.0f;
+			Is_First_Captured = 0;
+			overflow_count = 0;
+			filter_count = 0;  // Reset filter
 		}
 
-		printf("RPM: %.2f\r\n", rpm);
+		printf("Freq: %.1f Hz | RPM: %.1f\r\n", frequency, rpm);
 		HAL_Delay(200);
     /* USER CODE END WHILE */
 
