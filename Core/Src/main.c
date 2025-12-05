@@ -140,7 +140,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 			{
 				float refClock = TIMCLOCK/(PRESCALAR);
 				frequency = (refClock/Difference);
-				rpm = (frequency * 60);
+				rpm = floor(frequency * 60);
 				last_capture_time = getMicros(); // update timeout tracker
 			}
 
@@ -210,12 +210,7 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1) {
-		uint64_t now = getMicros();
-		if ((now - last_capture_time) > NO_PULSE_TIMEOUT_US) {
-			rpm = 0.0f;
-			first_time = 1;     a
-		}
-
+		
 		printf("RPM: %.2f\r\n", rpm);
 		HAL_Delay(200);
     /* USER CODE END WHILE */
