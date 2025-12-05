@@ -69,10 +69,11 @@ volatile float rpm = 0.0f;
 volatile uint8_t first_time = 1; // used for SysTick method (kept for timeout reset)
 volatile uint32_t last_ms = 0;   // used for SysTick method
 volatile uint32_t last_capture_time = 0;
-volatile uint32_t IC_Val1 = 0;
-volatile uint32_t IC_Val2 = 0;
+volatile uint16_t IC_Val1 = 0;
+volatile uint16_t IC_Val2 = 0;
 volatile uint32_t Difference = 0;
 volatile int Is_First_Captured = 0;
+volatile uint32_t overflow_count = 0;
 
 /* USER CODE END PFP */
 
@@ -101,29 +102,39 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 		{
 			IC_Val1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1); // read the first value
 			Is_First_Captured = 1;  // set the first captured as true
+			overflow_count = 0;  // reset overflow counter
+			last_capture_time = HAL_GetTick(); // update timeout tracker
 		}
 
 		else   // If the first rising edge is captured, now we will capture the second edge
 		{
 			IC_Val2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);  // read second value
 
-			if (IC_Val2 > IC_Val1)
+			// Calculate difference accounting for overflows
+			Difference = (overflow_count * 65536UL) + IC_Val2 - IC_Val1;
+
+			// Avoid division by zero
+			if (Difference > 0)
 			{
-				Difference = IC_Val2-IC_Val1;
+				float refClock = TIMCLOCK/(PRESCALAR);
+				frequency = (refClock/Difference);
+				rpm = (frequency * 60);
+				last_capture_time = HAL_GetTick(); // update timeout tracker
 			}
 
-			else if (IC_Val1 > IC_Val2)
-			{
-				Difference = (0xffffffff - IC_Val1) + IC_Val2;
-			}
-
-			float refClock = TIMCLOCK/(PRESCALAR);
-
-			frequency = (refClock/Difference);
-			rpm = (frequency * 60);
 			__HAL_TIM_SET_COUNTER(htim, 0);  // reset the counter
 			Is_First_Captured = 0; // set it back to false
+			overflow_count = 0;  // reset overflow counter
 		}
+	}
+}
+
+// Timer overflow callback - counts overflows between captures
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	if (htim->Instance == TIM2 && Is_First_Captured == 1)
+	{
+		overflow_count++;
 	}
 }
 /* USER CODE END 0 */
@@ -163,6 +174,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
 //  HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
 	HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
+	HAL_TIM_Base_Start_IT(&htim2);  // Enable overflow interrupt
 	TIM3->CCR1 = 5000/2;
 	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
   /* USER CODE END 2 */
