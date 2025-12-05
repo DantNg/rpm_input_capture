@@ -60,8 +60,8 @@ all: main-build
 main-build: encoder_reading.elf secondary-outputs
 
 # Tool invocations
-encoder_reading.elf encoder_reading.map: $(OBJS) $(USER_OBJS) C:\Users\victus16\STM32CubeIDE\workspace_1.19.0\encoder_reading\STM32F103C8TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "encoder_reading.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"C:\Users\victus16\STM32CubeIDE\workspace_1.19.0\encoder_reading\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="encoder_reading.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -u _printf_float -u _scanf_float -Wl,--start-group -lc -lm -Wl,--end-group
+encoder_reading.elf encoder_reading.map: $(OBJS) $(USER_OBJS) C:\Users\victus16\STM32CubeIDE\modbus_project\encoder_reading\STM32F103C8TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "encoder_reading.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"C:\Users\victus16\STM32CubeIDE\modbus_project\encoder_reading\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="encoder_reading.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -u _printf_float -u _scanf_float -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
