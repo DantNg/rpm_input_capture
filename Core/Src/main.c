@@ -75,11 +75,10 @@ volatile uint32_t Difference = 0;
 volatile int Is_First_Captured = 0;
 volatile uint32_t overflow_count = 0;
 volatile uint32_t last_overflow_count = 0;
-// Smoothing filter for display stability
-#define FILTER_SIZE 4
-static float freq_buffer[FILTER_SIZE] = {0};
-static uint8_t filter_idx = 0;
-static uint8_t filter_count = 0;
+// Fast IIR filter (exponential smoothing) - faster response than moving average
+#define ALPHA 0.3f  // 0.1-0.5: lower=smoother, higher=faster response
+static float freq_filtered = 0.0f;
+static uint8_t filter_initialized = 0;
 
 /* USER CODE END PFP */
 
@@ -144,16 +143,15 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 				float refClock = TIMCLOCK / (float)PRESCALAR;
 				float freq_raw = refClock / (float)Difference;
 				
-				// Moving average filter for stability
-				if (filter_count < FILTER_SIZE) filter_count++;
-				freq_buffer[filter_idx] = freq_raw;
-				filter_idx = (filter_idx + 1) % FILTER_SIZE;
-				
-				float freq_sum = 0;
-				for (uint8_t i = 0; i < filter_count; i++) {
-					freq_sum += freq_buffer[i];
+				// IIR filter: fast response, smooth display
+				if (!filter_initialized) {
+					freq_filtered = freq_raw;  // Initialize on first reading
+					filter_initialized = 1;
+				} else {
+					freq_filtered = ALPHA * freq_raw + (1.0f - ALPHA) * freq_filtered;
 				}
-				frequency = freq_sum / filter_count;
+				
+				frequency = freq_filtered;
 				rpm = frequency * 60.0f;
 			}
 			
@@ -225,7 +223,7 @@ int main(void)
 			frequency = 0.0f;
 			Is_First_Captured = 0;
 			overflow_count = 0;
-			filter_count = 0;  // Reset filter
+			filter_initialized = 0;  // Reset filter
 		}
 
 		printf("Freq: %.1f Hz | RPM: %.1f\r\n", frequency, rpm);
