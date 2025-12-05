@@ -68,11 +68,15 @@ static void MX_TIM4_Init(void);
 #define TIM2_COUNTER_HZ   1000000UL
 
 volatile float rpm = 0.0f;
-volatile uint8_t first_time = 1;
-volatile uint32_t last_timestamp_us = 0;
-volatile uint32_t current_timestamp_us = 0;
-volatile uint32_t period_us = 0;
+volatile uint8_t first_time = 1; // used for SysTick method (kept for timeout reset)
+volatile uint32_t last_ms = 0;   // used for SysTick method
 volatile uint32_t last_capture_time_us = 0;
+volatile uint16_t IC_Val1 = 0;
+volatile uint16_t IC_Val2 = 0;
+volatile uint32_t Difference = 0;
+volatile int Is_First_Captured = 0;
+volatile uint32_t overflow_count = 0;
+volatile uint32_t last_overflow_count = 0;
 
 /* USER CODE END PFP */
 
@@ -93,42 +97,67 @@ int fputc(int ch, FILE *f)
 
 float frequency = 0;
 
-// PA0 external interrupt callback - rising edge detection
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
-	if (GPIO_Pin == GPIO_PIN_0)  // PA0
+	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
 	{
-		current_timestamp_us = __HAL_TIM_GET_COUNTER(&htim4);
+		uint32_t now_us = __HAL_TIM_GET_COUNTER(&htim4);
 		
-		if (first_time)
+		if (Is_First_Captured==0)
 		{
-			last_timestamp_us = current_timestamp_us;
-			first_time = 0;
-			last_capture_time_us = current_timestamp_us;
+			IC_Val1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+			last_overflow_count = overflow_count;
+			Is_First_Captured = 1;
+			last_capture_time_us = now_us;
 		}
 		else
 		{
-			// Calculate period with 32-bit wrap handling
-			if (current_timestamp_us >= last_timestamp_us)
+			IC_Val2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+			uint32_t current_ovf = overflow_count;
+			
+			// Calculate total ticks with overflow handling
+			uint32_t overflow_ticks = (current_ovf - last_overflow_count) * 65536UL;
+			uint32_t capture_diff;
+			
+			if (IC_Val2 >= IC_Val1)
 			{
-				period_us = current_timestamp_us - last_timestamp_us;
+				capture_diff = IC_Val2 - IC_Val1;
 			}
-			else  // Timer wrapped
+			else
 			{
-				period_us = (0xFFFFFFFF - last_timestamp_us) + current_timestamp_us + 1;
+				// Handle wrap within same overflow period
+				capture_diff = (65536UL - IC_Val1) + IC_Val2;
+				// If no overflow recorded but wrap occurred, count it
+				if (overflow_ticks == 0) {
+					overflow_ticks = 65536UL;
+				}
 			}
 			
-			// Filter noise - minimum 50us period (max 20kHz)
-			if (period_us > 50)
+			Difference = overflow_ticks + capture_diff;
+			
+			// Calculate frequency if valid
+			if (Difference > 100)  // Filter noise (min ~10kHz with 1MHz counter)
 			{
-				// Calculate frequency and RPM
-				frequency = 1000000.0f / (float)period_us;  // Hz
+				float refClock = TIMCLOCK / (float)PRESCALAR;
+				frequency = refClock / (float)Difference;
 				rpm = frequency * 60.0f;
 			}
 			
-			last_timestamp_us = current_timestamp_us;
-			last_capture_time_us = current_timestamp_us;
+			// Reset for next measurement
+			__HAL_TIM_SET_COUNTER(htim, 0);
+			overflow_count = 0;
+			Is_First_Captured = 0;
+			last_capture_time_us = now_us;
 		}
+	}
+}
+
+// Overflow callback for long periods
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	if (htim->Instance == TIM2)
+	{
+		overflow_count++;
 	}
 }
 /* USER CODE END 0 */
@@ -167,8 +196,10 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
-  // Start TIM4 as microsecond counter for timestamp
-  HAL_TIM_Base_Start(&htim4);
+//  HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
+	HAL_TIM_Base_Start(&htim4);  // Start TIM4 as microsecond counter
+	HAL_TIM_Base_Start_IT(&htim2);  // Enable overflow interrupt
+	HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
 	TIM3->CCR1 = 50000/2;
 	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
   /* USER CODE END 2 */
@@ -184,8 +215,8 @@ int main(void)
 		if (elapsed_us > NO_PULSE_TIMEOUT_US) {
 			rpm = 0.0f;
 			frequency = 0.0f;
-			first_time = 1;
-			period_us = 0;
+			Is_First_Captured = 0;
+			overflow_count = 0;
 		}
 
 		printf("Freq: %.1f Hz | RPM: %.1f\r\n", frequency, rpm);
@@ -414,20 +445,9 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_AFIO_CLK_ENABLE();  // Required for EXTI!
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : PA0 - External Interrupt for RPM measurement */
-  GPIO_InitStruct.Pin = GPIO_PIN_0;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;  // Interrupt on rising edge
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /* EXTI interrupt init for PA0 */
-  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 
   /*Configure GPIO pin : PB12 */
   GPIO_InitStruct.Pin = GPIO_PIN_12;
