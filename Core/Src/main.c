@@ -69,9 +69,9 @@ volatile float rpm = 0.0f;
 volatile uint8_t first_time = 1; // used for SysTick method (kept for timeout reset)
 volatile uint32_t last_ms = 0;   // used for SysTick method
 volatile uint32_t last_capture_time = 0;
-volatile uint32_t IC_Val1 = 0;
-volatile uint32_t IC_Val2 = 0;
-volatile uint32_t Difference = 0;
+volatile uint16_t IC_Val1 = 0;
+volatile uint16_t IC_Val2 = 0;
+volatile uint16_t Difference = 0;
 volatile int Is_First_Captured = 0;
 
 /* USER CODE END PFP */
@@ -92,7 +92,7 @@ int fputc(int ch, FILE *f)
 
 
 float frequency = 0;
-float rpm = 0;
+
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
 	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
@@ -114,7 +114,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 
 			else if (IC_Val1 > IC_Val2)
 			{
-				Difference = (0xffffffff - IC_Val1) + IC_Val2;
+			    Difference = (65536 - IC_Val1) + IC_Val2;  // Đúng cho 16-bit timer
 			}
 
 			float refClock = TIMCLOCK/(PRESCALAR);
@@ -163,7 +163,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
 //  HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
 	HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
-	TIM3->CCR1 = 5;
+	TIM3->CCR1 = 50000/2;
 	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
   /* USER CODE END 2 */
 
@@ -303,7 +303,7 @@ static void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 72-1;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 9;
+  htim3.Init.Period = 50000-1;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
