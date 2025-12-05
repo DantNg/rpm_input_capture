@@ -43,6 +43,7 @@
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim4;
 
 UART_HandleTypeDef huart1;
 
@@ -56,11 +57,12 @@ static void MX_GPIO_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
 
 #define ENC_PPR           1.0f       // 1 xung / vòng
 #define MAX_RPM_ALLOWED   10000.0f
-#define NO_PULSE_TIMEOUT_MS 10000
+#define NO_PULSE_TIMEOUT_US 10000000UL  // 10 seconds in microseconds
 #define MIN_DIFF_MS  (uint32_t)(60000.0f / MAX_RPM_ALLOWED)
 // TIM2 counter frequency derived from prescaler (PSC=72-1 -> 1 MHz)
 #define TIM2_COUNTER_HZ   1000000UL
@@ -68,17 +70,13 @@ static void MX_TIM3_Init(void);
 volatile float rpm = 0.0f;
 volatile uint8_t first_time = 1; // used for SysTick method (kept for timeout reset)
 volatile uint32_t last_ms = 0;   // used for SysTick method
-volatile uint32_t last_capture_time = 0;
+volatile uint32_t last_capture_time_us = 0;
 volatile uint16_t IC_Val1 = 0;
 volatile uint16_t IC_Val2 = 0;
 volatile uint32_t Difference = 0;
 volatile int Is_First_Captured = 0;
 volatile uint32_t overflow_count = 0;
 volatile uint32_t last_overflow_count = 0;
-// Fast IIR filter (exponential smoothing) - faster response than moving average
-#define ALPHA 0.3f  // 0.1-0.5: lower=smoother, higher=faster response
-static float freq_filtered = 0.0f;
-static uint8_t filter_initialized = 0;
 
 /* USER CODE END PFP */
 
@@ -103,14 +101,14 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
 	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
 	{
-		uint32_t now_ms = HAL_GetTick();
+		uint32_t now_us = __HAL_TIM_GET_COUNTER(&htim4);
 		
 		if (Is_First_Captured==0)
 		{
 			IC_Val1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
 			last_overflow_count = overflow_count;
 			Is_First_Captured = 1;
-			last_capture_time = now_ms;
+			last_capture_time_us = now_us;
 		}
 		else
 		{
@@ -141,17 +139,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 			if (Difference > 100)  // Filter noise (min ~10kHz with 1MHz counter)
 			{
 				float refClock = TIMCLOCK / (float)PRESCALAR;
-				float freq_raw = refClock / (float)Difference;
-				
-				// IIR filter: fast response, smooth display
-				if (!filter_initialized) {
-					freq_filtered = freq_raw;  // Initialize on first reading
-					filter_initialized = 1;
-				} else {
-					freq_filtered = ALPHA * freq_raw + (1.0f - ALPHA) * freq_filtered;
-				}
-				
-				frequency = freq_filtered;
+				frequency = refClock / (float)Difference;
 				rpm = frequency * 60.0f;
 			}
 			
@@ -159,7 +147,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 			__HAL_TIM_SET_COUNTER(htim, 0);
 			overflow_count = 0;
 			Is_First_Captured = 0;
-			last_capture_time = now_ms;
+			last_capture_time_us = now_us;
 		}
 	}
 }
@@ -206,8 +194,10 @@ int main(void)
   MX_TIM2_Init();
   MX_USART1_UART_Init();
   MX_TIM3_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 //  HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
+	HAL_TIM_Base_Start(&htim4);  // Start TIM4 as microsecond counter
 	HAL_TIM_Base_Start_IT(&htim2);  // Enable overflow interrupt
 	HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
 	TIM3->CCR1 = 50000/2;
@@ -217,13 +207,16 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1) {
-		uint32_t now = HAL_GetTick();
-		if ((now - last_capture_time) > NO_PULSE_TIMEOUT_MS) {
+		uint32_t now_us = __HAL_TIM_GET_COUNTER(&htim4);
+		uint32_t elapsed_us = (now_us >= last_capture_time_us) ? 
+		                      (now_us - last_capture_time_us) : 
+		                      (0xFFFFFFFF - last_capture_time_us + now_us);
+		
+		if (elapsed_us > NO_PULSE_TIMEOUT_US) {
 			rpm = 0.0f;
 			frequency = 0.0f;
 			Is_First_Captured = 0;
 			overflow_count = 0;
-			filter_initialized = 0;  // Reset filter
 		}
 
 		printf("Freq: %.1f Hz | RPM: %.1f\r\n", frequency, rpm);
@@ -379,6 +372,28 @@ static void MX_TIM3_Init(void)
   /* USER CODE END TIM3_Init 2 */
   HAL_TIM_MspPostInit(&htim3);
 
+}
+
+/**
+  * @brief TIM4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM4_Init(void)
+{
+  /* TIM4 configured as microsecond counter (1 MHz) */
+  /* 32-bit counter for long timeout measurement */
+  
+  htim4.Instance = TIM4;
+  htim4.Init.Prescaler = 72-1;  // 72MHz / 72 = 1MHz (1us per tick)
+  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim4.Init.Period = 0xFFFFFFFF;  // Max 32-bit value
+  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /**
