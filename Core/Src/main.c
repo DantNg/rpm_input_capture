@@ -101,37 +101,31 @@ int fputc(int ch, FILE *f)
 
 // Adaptive hysteresis filter function
 int apply_hysteresis_filter(int new_rpm, int prev_rpm) {
-	// Calculate adaptive threshold based on actual deviation patterns
 	int threshold;
 	if (new_rpm < 100) {
-		threshold = 1;        // ±1 for low RPM (30 → 29~31)
+		threshold = 1;        
 	} else if (new_rpm < 500) {
-		threshold = 2;        // ±2 for medium RPM (300 → 298~302)
+		threshold = 2;       
 	} else if (new_rpm < 800) {
-		threshold = 5;        // ±5 for high RPM (600 → 595~605)
+		threshold = 5;      
 	} else if (new_rpm < 1000) {
-		threshold = 8;        // ±8 for very high RPM (900 → 892~908, larger oscillations)
+		threshold = 8;       
 	} else {
-		threshold = 10;        // ±10 for extremely high RPM (1000+ → larger oscillations)
+		threshold = 10;        
 	}
 	
 	// Calculate difference
 	int diff = new_rpm - prev_rpm;
 	if (diff < 0) diff = -diff;  // abs value
-	
-	// Apply hysteresis logic
 	if (diff <= threshold) {
-		// Within threshold - maintain previous value for stability
 		stability_counter++;
 		if (stability_counter >= 3) {
-			// After 3 stable readings, allow small updates
 			return prev_rpm + (new_rpm - prev_rpm) / 4;  // Smooth update
 		}
-		return prev_rpm;  // Keep previous value
+		return prev_rpm;  
 	} else {
-		// Outside threshold - real change detected
 		stability_counter = 0;
-		return new_rpm;   // Accept new value
+		return new_rpm;  
 	}
 }
 
@@ -174,11 +168,9 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 			}
 			
 			last_capture_time = HAL_GetTick(); // update timeout tracker
+			IC_Val1 = IC_Val2;  
+			overflow_count = 0; 
 			
-			// Prepare for next measurement: IC_Val2 becomes IC_Val1 for next period
-			IC_Val1 = IC_Val2;  // Continue measuring from current position
-			overflow_count = 0;  // reset overflow counter for next period
-			// Don't reset Is_First_Captured - keep measuring consecutive periods
 		}
 	}
 }
@@ -229,8 +221,6 @@ int main(void)
 //  HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
 	HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
 	HAL_TIM_Base_Start_IT(&htim2);  // Enable overflow interrupt
-	TIM3->CCR1 = 5000/2;
-	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
