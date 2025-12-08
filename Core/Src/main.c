@@ -144,8 +144,25 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 		{
 			IC_Val2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);  // read second value
 			
+			// Check for timer overflow condition - skip calculation if too many overflows
+			if (overflow_count > 10) {
+				// Too many overflows, period too long or measurement error
+				// Reset and wait for next valid measurement
+				Is_First_Captured = 0;
+				overflow_count = 0;
+				return;
+			}
+			
 			// Calculate difference accounting for overflows
 			Difference = (overflow_count * 65536UL) + IC_Val2 - IC_Val1;
+			
+			// Additional check: reject if period is unreasonably long (>1 second at 1MHz)
+			if (Difference > 1000000UL) {
+				// Period > 1 second, likely measurement error
+				Is_First_Captured = 0;
+				overflow_count = 0;
+				return;
+			}
 			
 			if (first_measurement) {
 				// First measurement: use single period
