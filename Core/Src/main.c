@@ -65,7 +65,13 @@ static void MX_TIM3_Init(void);
 // TIM2 counter frequency derived from prescaler (PSC=72-1 -> 1 MHz)
 #define TIM2_COUNTER_HZ   1000000UL
 
+// Exponential smoothing filter constants
+#define ALPHA_FILTER     0.3f    // Smoothing factor (0.1-0.5), lower = more smooth
+#define MAX_RPM_CHANGE   200.0f  // Maximum allowed RPM change per reading
+#define MIN_VALID_DIFF   50      // Minimum valid timer difference to avoid noise
+
 volatile float rpm = 0.0f;
+volatile float rpm_filtered = 0.0f;  // Filtered RPM value
 volatile uint32_t last_capture_time = 0;  // HAL_GetTick timestamp
 volatile uint16_t IC_Val1 = 0;
 volatile uint16_t IC_Val2 = 0;
@@ -108,8 +114,11 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 			// Calculate difference accounting for overflows
 			Difference = (overflow_count * 65536UL) + IC_Val2 - IC_Val1;
 			
-			new_capture_ready = 1;  // Signal main loop to process
-			last_capture_time = HAL_GetTick(); // update timeout tracker
+			// Noise rejection - only process if difference is reasonable
+			if (Difference >= MIN_VALID_DIFF) {
+				new_capture_ready = 1;  // Signal main loop to process
+				last_capture_time = HAL_GetTick(); // update timeout tracker
+			}
 			
 			__HAL_TIM_SET_COUNTER(htim, 0);  // reset the counter
 			Is_First_Captured = 0; // set it back to false
@@ -171,25 +180,39 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1) {
-		// Process new capture data if available
-		if (new_capture_ready) {
-			new_capture_ready = 0;  // Clear flag
+	// Process new capture data if available
+	if (new_capture_ready) {
+		new_capture_ready = 0;  // Clear flag
+		
+		// Calculate RPM from captured difference
+		if (Difference > 0) {
+			float refClock = TIMCLOCK/(PRESCALAR);
+			float frequency = (refClock/Difference);
+			float rpm_raw = frequency * 60.0f;
 			
-			// Calculate RPM from captured difference
-			if (Difference > 0) {
-				float refClock = TIMCLOCK/(PRESCALAR);
-				float frequency = (refClock/Difference);
-				rpm = floor(frequency * 60);
+			// Outlier rejection - only accept reasonable changes
+			if (rpm_filtered == 0.0f) {
+				// First reading, accept as is
+				rpm_filtered = rpm_raw;
+			} else {
+				float rpm_diff = rpm_raw - rpm_filtered;
+				if (rpm_diff < 0) rpm_diff = -rpm_diff;  // abs value
+				
+				if (rpm_diff <= MAX_RPM_CHANGE) {
+					// Apply exponential smoothing filter
+					rpm_filtered = (ALPHA_FILTER * rpm_raw) + ((1.0f - ALPHA_FILTER) * rpm_filtered);
+				}
+				// If difference too large, ignore this reading (noise/glitch)
 			}
+			
+			rpm = rpm_filtered;
 		}
-		
-		// Check for timeout (no pulses)
-		uint32_t now = HAL_GetTick();
-		if ((now - last_capture_time) > NO_PULSE_TIMEOUT_MS) {
-			rpm = 0.0f;
-		}
-		
-		printf("RPM: %.2f\r\n", rpm);
+	}	// Check for timeout (no pulses)
+	uint32_t now = HAL_GetTick();
+	if ((now - last_capture_time) > NO_PULSE_TIMEOUT_MS) {
+		rpm = 0.0f;
+		rpm_filtered = 0.0f;  // Reset filter state
+	}		printf("RPM: %.2f\r\n", rpm);
 		HAL_Delay(200);
     /* USER CODE END WHILE */
 
@@ -284,7 +307,7 @@ static void MX_TIM2_Init(void)
   sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 0;
+  sConfigIC.ICFilter = 5;  // Increased filter to reduce noise at high RPM
   if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
