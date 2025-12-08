@@ -111,9 +111,10 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 			new_capture_ready = 1;  // Signal main loop to process
 			last_capture_time = HAL_GetTick(); // update timeout tracker
 			
-			__HAL_TIM_SET_COUNTER(htim, 0);  // reset the counter
-			Is_First_Captured = 0; // set it back to false
-			overflow_count = 0;  // reset overflow counter
+			// Prepare for next measurement: IC_Val2 becomes IC_Val1 for next period
+			IC_Val1 = IC_Val2;  // Continue measuring from current position
+			overflow_count = 0;  // reset overflow counter for next period
+			// Don't reset Is_First_Captured - keep measuring consecutive periods
 		}
 	}
 }
