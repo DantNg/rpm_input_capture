@@ -107,11 +107,11 @@ int apply_hysteresis_filter(int new_rpm, int prev_rpm) {
 	} else if (new_rpm < 500) {
 		threshold = 2;       
 	} else if (new_rpm < 800) {
-		threshold = 6;      
+		threshold = 10;      
 	} else if (new_rpm < 1000) {
-		threshold = 8;       
+		threshold = 15;       
 	} else {
-		threshold = 10;        
+		threshold = 20;        
 	}
 	
 	// Calculate difference
@@ -144,25 +144,8 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 		{
 			IC_Val2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);  // read second value
 			
-			// Check for timer overflow condition - skip calculation if too many overflows
-			if (overflow_count > 10) {
-				// Too many overflows, period too long or measurement error
-				// Reset and wait for next valid measurement
-				Is_First_Captured = 0;
-				overflow_count = 0;
-				return;
-			}
-			
 			// Calculate difference accounting for overflows
 			Difference = (overflow_count * 65536UL) + IC_Val2 - IC_Val1;
-			
-			// Additional check: reject if period is unreasonably long (>1 second at 1MHz)
-			if (Difference > 1000000UL) {
-				// Period > 1 second, likely measurement error
-				Is_First_Captured = 0;
-				overflow_count = 0;
-				return;
-			}
 			
 			if (first_measurement) {
 				// First measurement: use single period
@@ -247,16 +230,22 @@ int main(void)
 		if (new_capture_ready) {
 			new_capture_ready = 0;  // Clear flag
 			
-			// Calculate RPM from captured difference
-			if (Difference > 0) {
+			// Overflow protection - check if measurement is valid
+			if (Difference > 0 && Difference < 1000000UL) {
+				// Calculate RPM from captured difference
 				float refClock = TIMCLOCK/(PRESCALAR);
 				float frequency = (refClock/Difference);
 				int rpm_raw = (int)(frequency * 60.0f);
 				
-				// Apply adaptive hysteresis filter
-				rpm = apply_hysteresis_filter(rpm_raw, rpm_previous);
-				rpm_previous = rpm;
+				// Additional sanity check for reasonable RPM range
+				if (rpm_raw > 0 && rpm_raw < 20000) {
+					// Apply adaptive hysteresis filter
+					rpm = apply_hysteresis_filter(rpm_raw, rpm_previous);
+					rpm_previous = rpm;
+				}
+				// If RPM is unreasonable, ignore this reading
 			}
+			// If Difference is invalid (too large or zero), ignore this reading
 		}
 		
 		// Check for timeout (no pulses)
@@ -368,7 +357,7 @@ static void MX_TIM2_Init(void)
   sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 2;
+  sConfigIC.ICFilter = 0;
   if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
