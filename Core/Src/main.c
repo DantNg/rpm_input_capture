@@ -74,6 +74,11 @@ volatile int Is_First_Captured = 0;
 volatile uint32_t overflow_count = 0;
 volatile uint8_t new_capture_ready = 0;  // Flag to indicate new capture is ready
 
+// Variables for period averaging
+volatile uint32_t period_sum = 0;     // Sum of periods for averaging
+volatile uint8_t period_count = 0;     // Number of periods collected
+volatile uint8_t first_measurement = 1; // Flag for first measurement
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -108,7 +113,26 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 			// Calculate difference accounting for overflows
 			Difference = (overflow_count * 65536UL) + IC_Val2 - IC_Val1;
 			
-			new_capture_ready = 1;  // Signal main loop to process
+			if (first_measurement) {
+				// First measurement: use single period
+				new_capture_ready = 1;
+				first_measurement = 0;
+			} else {
+				// Subsequent measurements: collect periods for averaging
+				period_sum += Difference;
+				period_count++;
+				
+				if (period_count >= 2) {
+					// Have 2 periods, calculate average
+					Difference = period_sum / period_count;
+					new_capture_ready = 1;
+					
+					// Reset for next averaging cycle
+					period_sum = 0;
+					period_count = 0;
+				}
+			}
+			
 			last_capture_time = HAL_GetTick(); // update timeout tracker
 			
 			// Prepare for next measurement: IC_Val2 becomes IC_Val1 for next period
@@ -188,6 +212,11 @@ int main(void)
 		uint32_t now = HAL_GetTick();
 		if ((now - last_capture_time) > NO_PULSE_TIMEOUT_MS) {
 			rpm = 0.0f;
+			// Reset averaging state
+			first_measurement = 1;
+			period_sum = 0;
+			period_count = 0;
+			Is_First_Captured = 0;
 		}
 		
 		printf("RPM: %.2f\r\n", rpm);
