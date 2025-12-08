@@ -101,16 +101,18 @@ int fputc(int ch, FILE *f)
 
 // Adaptive hysteresis filter function
 int apply_hysteresis_filter(int new_rpm, int prev_rpm) {
-	// Calculate adaptive threshold based on RPM range
+	// Calculate adaptive threshold based on actual deviation patterns
 	int threshold;
 	if (new_rpm < 100) {
-		threshold = 2;        // ±2 for low RPM (30 → 28~32)
+		threshold = 1;        // ±1 for low RPM (30 → 29~31)
 	} else if (new_rpm < 500) {
-		threshold = 3;        // ±3 for medium RPM (300 → 297~303)
+		threshold = 2;        // ±2 for medium RPM (300 → 298~302)
 	} else if (new_rpm < 800) {
-		threshold = 4;        // ±4 for high RPM (600 → 596~604)
+		threshold = 2;        // ±2 for high RPM (600 → 598~602)
+	} else if (new_rpm < 1000) {
+		threshold = 5;        // ±5 for very high RPM (900 → 895~905, larger oscillations)
 	} else {
-		threshold = 5;        // ±5 for very high RPM (1000 → 995~1005)
+		threshold = 6;        // ±6 for extremely high RPM (1000+ → larger oscillations)
 	}
 	
 	// Calculate difference
