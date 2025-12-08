@@ -108,11 +108,11 @@ int apply_hysteresis_filter(int new_rpm, int prev_rpm) {
 	} else if (new_rpm < 500) {
 		threshold = 2;        // ±2 for medium RPM (300 → 298~302)
 	} else if (new_rpm < 800) {
-		threshold = 2;        // ±2 for high RPM (600 → 598~602)
+		threshold = 5;        // ±5 for high RPM (600 → 595~605)
 	} else if (new_rpm < 1000) {
-		threshold = 5;        // ±5 for very high RPM (900 → 895~905, larger oscillations)
+		threshold = 8;        // ±8 for very high RPM (900 → 892~908, larger oscillations)
 	} else {
-		threshold = 6;        // ±6 for extremely high RPM (1000+ → larger oscillations)
+		threshold = 10;        // ±10 for extremely high RPM (1000+ → larger oscillations)
 	}
 	
 	// Calculate difference
