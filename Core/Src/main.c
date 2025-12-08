@@ -119,7 +119,7 @@ int apply_hysteresis_filter(int new_rpm, int prev_rpm) {
 	if (diff < 0) diff = -diff;  // abs value
 	if (diff <= threshold) {
 		stability_counter++;
-		if (stability_counter >= 3) {
+		if (stability_counter >= 10) {
 			return prev_rpm + (new_rpm - prev_rpm) / 4;  // Smooth update
 		}
 		return prev_rpm;  
