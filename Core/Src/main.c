@@ -69,7 +69,8 @@ volatile uint8_t first_time = 1;
 volatile uint32_t last_ms = 0;
 volatile uint32_t last_capture_time = 0;
 volatile uint32_t last_ccr1 = 0;
-// No overflow software counting needed when using Reset slave mode
+volatile uint32_t tim2_ovf = 0;
+volatile uint32_t last_ovf = 0;
 
 /* USER CODE END PFP */
 
@@ -85,20 +86,36 @@ int fputc(int ch, FILE *f)
 	return ch;
 }
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
-	if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
+	if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2) {
 		uint32_t now_ms = HAL_GetTick();
 		uint32_t ccr = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+		uint32_t ovf = tim2_ovf; // snapshot overflow counter
 
 		if (first_time) {
 			last_ccr1 = ccr;
+			last_ovf = ovf;
 			first_time = 0;
 			last_capture_time = now_ms;
 			return;
 		}
 
-		// Ở Reset slave mode, CCR1 chính là số tick giữa 2 cạnh liên tiếp
-		uint32_t delta_ticks = ccr;
+		// Tính khoảng thời gian giữa 2 cạnh bằng timer tick (1 tick = 1 us)
+		uint32_t ovf_diff = ovf - last_ovf;
+		uint32_t ticks_mod;
+		if (ccr >= last_ccr1) {
+			ticks_mod = ccr - last_ccr1;
+		} else {
+			ticks_mod = (htim2.Init.Period + 1U) - last_ccr1 + ccr;
+		}
+
+		// Nếu overflow xảy ra rất sát thời điểm capture, có thể ovf chưa kịp tăng
+		if ((ovf_diff == 0U) && (ccr < last_ccr1)) {
+			ovf_diff = 1U;
+		}
+
+		uint32_t delta_ticks = ovf_diff * (htim2.Init.Period + 1U) + ticks_mod;
 		last_ccr1 = ccr;
+		last_ovf = ovf;
 
 		// Lọc xung nghi nhiễu dựa trên ngưỡng tối thiểu
 		if (delta_ticks < MIN_DIFF_TICKS) {
@@ -113,6 +130,12 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
 		}
 
 		last_capture_time = now_ms;
+	}
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	if (htim->Instance == TIM2) {
+		tim2_ovf++;
 	}
 }
 /* USER CODE END 0 */
@@ -149,6 +172,7 @@ int main(void) {
 	MX_USART1_UART_Init();
 	/* USER CODE BEGIN 2 */
 //  HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
+	HAL_TIM_Base_Start_IT(&htim2);           // enable update IRQ for overflow counting
 	HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
 	/* USER CODE END 2 */
 
@@ -161,7 +185,7 @@ int main(void) {
 			first_time = 1;     // để lần có xung mới lại “mồi” lại mốc đo
 		}
 
-		printf("RPM: %.2f\r\n", rpm);
+		printf("RPM: %.2f | IC:%lu | ticks:%lu\r\n", rpm, (unsigned long)ic_isr_count, (unsigned long)last_delta_ticks);
 		HAL_Delay(200);
 		/* USER CODE END WHILE */
 
@@ -256,11 +280,20 @@ static void MX_TIM2_Init(void) {
 			!= HAL_OK) {
 		Error_Handler();
 	}
+	// Configure CH1 to define TI1FP1 (trigger source), not necessarily used for capture
 	sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
 	sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
 	sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
 	sConfigIC.ICFilter = 4;
 	if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK) {
+		Error_Handler();
+	}
+	// Configure CH2 to capture the period using TI1 (indirect selection)
+	sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+	sConfigIC.ICSelection = TIM_ICSELECTION_INDIRECTTI; // CH2 captures TI1
+	sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
+	sConfigIC.ICFilter = 4;
+	if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_2) != HAL_OK) {
 		Error_Handler();
 	}
 	/* USER CODE BEGIN TIM2_Init 2 */
