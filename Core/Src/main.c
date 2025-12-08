@@ -43,7 +43,6 @@
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
-TIM_HandleTypeDef htim4;
 
 UART_HandleTypeDef huart1;
 
@@ -57,26 +56,23 @@ static void MX_GPIO_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM3_Init(void);
-static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
 
 #define ENC_PPR           1.0f       // 1 xung / vòng
 #define MAX_RPM_ALLOWED   10000.0f
-#define NO_PULSE_TIMEOUT_US 10000000UL  // 10 seconds in microseconds
+#define NO_PULSE_TIMEOUT_MS 10000UL  // 10 seconds in milliseconds
 #define MIN_DIFF_MS  (uint32_t)(60000.0f / MAX_RPM_ALLOWED)
 // TIM2 counter frequency derived from prescaler (PSC=72-1 -> 1 MHz)
 #define TIM2_COUNTER_HZ   1000000UL
 
 volatile float rpm = 0.0f;
-volatile uint8_t first_time = 1; // used for SysTick method (kept for timeout reset)
-volatile uint32_t last_ms = 0;   // used for SysTick method
-volatile uint64_t last_capture_time = 0;  // changed to uint64_t for microseconds
+volatile uint32_t last_capture_time = 0;  // HAL_GetTick timestamp
 volatile uint16_t IC_Val1 = 0;
 volatile uint16_t IC_Val2 = 0;
 volatile uint32_t Difference = 0;
 volatile int Is_First_Captured = 0;
 volatile uint32_t overflow_count = 0;
-volatile uint32_t tim4_overflow_count = 0;  // TIM4 overflow counter
+volatile uint8_t new_capture_ready = 0;  // Flag to indicate new capture is ready
 
 /* USER CODE END PFP */
 
@@ -94,28 +90,6 @@ int fputc(int ch, FILE *f)
 #define TIMCLOCK   72000000
 #define PRESCALAR  72
 
-// Get microseconds timestamp using TIM4
-// TIM4: 72 MHz / 1 (prescaler=0) = 72 MHz, so each tick = 1/72 us
-// Period = 65535, overflow every 65535/72 = 910.2 us
-uint64_t getMicros(void)
-{
-	uint32_t cnt = __HAL_TIM_GET_COUNTER(&htim4);
-	uint32_t ovf = tim4_overflow_count;
-	
-	// Check if overflow occurred during read
-	if (__HAL_TIM_GET_FLAG(&htim4, TIM_FLAG_UPDATE) != RESET)
-	{
-		ovf = tim4_overflow_count;
-		cnt = __HAL_TIM_GET_COUNTER(&htim4);
-	}
-	
-	// Convert to microseconds: ticks / 72 = microseconds
-	uint64_t total_ticks = ((uint64_t)ovf * 65536ULL) + cnt;
-	return total_ticks / 72;
-}
-
-float frequency = 0;
-
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
 	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
@@ -125,25 +99,18 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 			IC_Val1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1); // read the first value
 			Is_First_Captured = 1;  // set the first captured as true
 			overflow_count = 0;  // reset overflow counter
-			last_capture_time = getMicros(); // update timeout tracker
+			last_capture_time = HAL_GetTick(); // update timeout tracker
 		}
-
 		else   // If the first rising edge is captured, now we will capture the second edge
 		{
 			IC_Val2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);  // read second value
-
+			
 			// Calculate difference accounting for overflows
 			Difference = (overflow_count * 65536UL) + IC_Val2 - IC_Val1;
-
-			// Avoid division by zero
-			if (Difference > 0)
-			{
-				float refClock = TIMCLOCK/(PRESCALAR);
-				frequency = (refClock/Difference);
-				rpm = floor(frequency * 60);
-				last_capture_time = getMicros(); // update timeout tracker
-			}
-
+			
+			new_capture_ready = 1;  // Signal main loop to process
+			last_capture_time = HAL_GetTick(); // update timeout tracker
+			
 			__HAL_TIM_SET_COUNTER(htim, 0);  // reset the counter
 			Is_First_Captured = 0; // set it back to false
 			overflow_count = 0;  // reset overflow counter
@@ -157,10 +124,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	if (htim->Instance == TIM2 && Is_First_Captured == 1)
 	{
 		overflow_count++;
-	}
-	else if (htim->Instance == TIM4)
-	{
-		tim4_overflow_count++;
 	}
 }
 /* USER CODE END 0 */
@@ -197,12 +160,10 @@ int main(void)
   MX_TIM2_Init();
   MX_USART1_UART_Init();
   MX_TIM3_Init();
-  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 //  HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
 	HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
 	HAL_TIM_Base_Start_IT(&htim2);  // Enable overflow interrupt
-	HAL_TIM_Base_Start_IT(&htim4);  // Start TIM4 for microsecond timing
 	TIM3->CCR1 = 5000/2;
 	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
   /* USER CODE END 2 */
@@ -210,6 +171,23 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1) {
+		// Process new capture data if available
+		if (new_capture_ready) {
+			new_capture_ready = 0;  // Clear flag
+			
+			// Calculate RPM from captured difference
+			if (Difference > 0) {
+				float refClock = TIMCLOCK/(PRESCALAR);
+				float frequency = (refClock/Difference);
+				rpm = floor(frequency * 60);
+			}
+		}
+		
+		// Check for timeout (no pulses)
+		uint32_t now = HAL_GetTick();
+		if ((now - last_capture_time) > NO_PULSE_TIMEOUT_MS) {
+			rpm = 0.0f;
+		}
 		
 		printf("RPM: %.2f\r\n", rpm);
 		HAL_Delay(200);
@@ -366,50 +344,7 @@ static void MX_TIM3_Init(void)
 
 }
 
-/**
-  * @brief TIM4 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM4_Init(void)
-{
 
-  /* USER CODE BEGIN TIM4_Init 0 */
-
-  /* USER CODE END TIM4_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM4_Init 1 */
-
-  /* USER CODE END TIM4_Init 1 */
-  htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 0;
-  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 65535;
-  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM4_Init 2 */
-
-  /* USER CODE END TIM4_Init 2 */
-
-}
 
 /**
   * @brief USART1 Initialization Function
