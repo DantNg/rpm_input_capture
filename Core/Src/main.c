@@ -103,15 +103,15 @@ int fputc(int ch, FILE *f)
 int apply_hysteresis_filter(int new_rpm, int prev_rpm) {
 	int threshold;
 	if (new_rpm < 100) {
-		threshold = 1;        
+		threshold = 5;        
 	} else if (new_rpm < 500) {
-		threshold = 2;       
-	} else if (new_rpm < 800) {
-		threshold = 8;      
-	} else if (new_rpm < 1100) {
 		threshold = 10;       
+	} else if (new_rpm < 800) {
+		threshold = 20;      
+	} else if (new_rpm < 1100) {
+		threshold = 30;       
 	} else {
-		threshold = 15;        
+		threshold = 50;        
 	}
 	
 	// Calculate difference
