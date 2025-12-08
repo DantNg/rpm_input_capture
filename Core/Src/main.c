@@ -107,11 +107,11 @@ int apply_hysteresis_filter(int new_rpm, int prev_rpm) {
 	} else if (new_rpm < 500) {
 		threshold = 2;       
 	} else if (new_rpm < 800) {
-		threshold = 10;      
-	} else if (new_rpm < 1000) {
-		threshold = 15;       
+		threshold = 8;      
+	} else if (new_rpm < 1100) {
+		threshold = 10;       
 	} else {
-		threshold = 20;        
+		threshold = 15;        
 	}
 	
 	// Calculate difference
@@ -230,22 +230,16 @@ int main(void)
 		if (new_capture_ready) {
 			new_capture_ready = 0;  // Clear flag
 			
-			// Overflow protection - check if measurement is valid
-			if (Difference > 0 && Difference < 1000000UL) {
-				// Calculate RPM from captured difference
+			// Calculate RPM from captured difference
+			if (Difference > 0) {
 				float refClock = TIMCLOCK/(PRESCALAR);
 				float frequency = (refClock/Difference);
 				int rpm_raw = (int)(frequency * 60.0f);
 				
-				// Additional sanity check for reasonable RPM range
-				if (rpm_raw > 0 && rpm_raw < 20000) {
-					// Apply adaptive hysteresis filter
-					rpm = apply_hysteresis_filter(rpm_raw, rpm_previous);
-					rpm_previous = rpm;
-				}
-				// If RPM is unreasonable, ignore this reading
+				// Apply adaptive hysteresis filter
+				rpm = apply_hysteresis_filter(rpm_raw, rpm_previous);
+				rpm_previous = rpm;
 			}
-			// If Difference is invalid (too large or zero), ignore this reading
 		}
 		
 		// Check for timeout (no pulses)
@@ -357,7 +351,7 @@ static void MX_TIM2_Init(void)
   sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 0;
+  sConfigIC.ICFilter = 2;
   if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
