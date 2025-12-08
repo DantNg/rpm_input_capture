@@ -70,7 +70,7 @@ static void MX_TIM3_Init(void);
 #define MAX_RPM_CHANGE   200.0f  // Maximum allowed RPM change per reading
 #define MIN_VALID_DIFF   50      // Minimum valid timer difference to avoid noise
 
-volatile float rpm = 0.0f;
+volatile int rpm = 0;
 volatile float rpm_filtered = 0.0f;  // Filtered RPM value
 volatile uint32_t last_capture_time = 0;  // HAL_GetTick timestamp
 volatile uint16_t IC_Val1 = 0;
@@ -205,15 +205,19 @@ int main(void)
 				// If difference too large, ignore this reading (noise/glitch)
 			}
 			
-			rpm = rpm_filtered;
+			rpm = (int)(rpm_filtered + 0.5f);  // Convert to integer with rounding
 		}
-	}	// Check for timeout (no pulses)
+	}
+	
+	// Check for timeout (no pulses)
 	uint32_t now = HAL_GetTick();
 	if ((now - last_capture_time) > NO_PULSE_TIMEOUT_MS) {
-		rpm = 0.0f;
+		rpm = 0;
 		rpm_filtered = 0.0f;  // Reset filter state
-	}		printf("RPM: %.2f\r\n", rpm);
-		HAL_Delay(200);
+	}
+	
+	printf("RPM: %d\r\n", rpm);
+	HAL_Delay(200);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
