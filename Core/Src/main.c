@@ -122,8 +122,8 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 				period_sum += Difference;
 				period_count++;
 				
-				if (period_count >= 2) {
-					// Have 2 periods, calculate average
+				if (period_count >= 3) {
+					// Have 3 periods, calculate average
 					Difference = period_sum / period_count;
 					new_capture_ready = 1;
 					
