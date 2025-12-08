@@ -80,6 +80,12 @@ volatile int Is_First_Captured = 0;
 volatile uint32_t overflow_count = 0;
 volatile uint8_t new_capture_ready = 0;  // Flag to indicate new capture is ready
 
+// Raw capture data for main loop processing
+volatile uint16_t capture_val1_raw = 0;
+volatile uint16_t capture_val2_raw = 0;
+volatile uint32_t overflow_count_raw = 0;
+volatile uint8_t capture_complete = 0;
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -100,29 +106,24 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
 	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
 	{
-		if (Is_First_Captured==0) // if the first rising edge is not captured
+		if (Is_First_Captured == 0)
 		{
-			IC_Val1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1); // read the first value
-			Is_First_Captured = 1;  // set the first captured as true
-			overflow_count = 0;  // reset overflow counter
-			last_capture_time = HAL_GetTick(); // update timeout tracker
+			// First capture - just store value and flag
+			capture_val1_raw = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+			Is_First_Captured = 1;
+			overflow_count = 0;
 		}
-		else   // If the first rising edge is captured, now we will capture the second edge
+		else
 		{
-			IC_Val2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);  // read second value
+			// Second capture - store values and signal completion
+			capture_val2_raw = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+			overflow_count_raw = overflow_count;
+			capture_complete = 1;  // Signal main loop
 			
-			// Calculate difference accounting for overflows
-			Difference = (overflow_count * 65536UL) + IC_Val2 - IC_Val1;
-			
-			// Noise rejection - only process if difference is reasonable
-			if (Difference >= MIN_VALID_DIFF) {
-				new_capture_ready = 1;  // Signal main loop to process
-				last_capture_time = HAL_GetTick(); // update timeout tracker
-			}
-			
-			__HAL_TIM_SET_COUNTER(htim, 0);  // reset the counter
-			Is_First_Captured = 0; // set it back to false
-			overflow_count = 0;  // reset overflow counter
+			// Reset for next measurement
+			__HAL_TIM_SET_COUNTER(htim, 0);
+			Is_First_Captured = 0;
+			overflow_count = 0;
 		}
 	}
 }
@@ -180,34 +181,52 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 	while (1) {
-	// Process new capture data if available
-	if (new_capture_ready) {
-		new_capture_ready = 0;  // Clear flag
-		
-		// Calculate RPM from captured difference
-		if (Difference > 0) {
-			float refClock = TIMCLOCK/(PRESCALAR);
-			float frequency = (refClock/Difference);
-			float rpm_raw = frequency * 60.0f;
+		// Process new capture data if available
+		if (capture_complete) {
+			capture_complete = 0;  // Clear flag
 			
-			// Outlier rejection - only accept reasonable changes
-			if (rpm_filtered == 0.0f) {
-				// First reading, accept as is
-				rpm_filtered = rpm_raw;
-			} else {
-				float rpm_diff = rpm_raw - rpm_filtered;
-				if (rpm_diff < 0) rpm_diff = -rpm_diff;  // abs value
-				
-				if (rpm_diff <= MAX_RPM_CHANGE) {
-					// Apply exponential smoothing filter
-					rpm_filtered = (ALPHA_FILTER * rpm_raw) + ((1.0f - ALPHA_FILTER) * rpm_filtered);
-				}
-				// If difference too large, ignore this reading (noise/glitch)
+			// Copy capture values to working variables
+			IC_Val1 = capture_val1_raw;
+			IC_Val2 = capture_val2_raw;
+			
+			// Calculate difference accounting for overflows
+			Difference = (overflow_count_raw * 65536UL) + IC_Val2 - IC_Val1;
+			
+			// Noise rejection - only process if difference is reasonable
+			if (Difference >= MIN_VALID_DIFF) {
+				new_capture_ready = 1;
+				last_capture_time = HAL_GetTick();
 			}
-			
-			rpm = (int)(rpm_filtered + 0.5f);  // Convert to integer with rounding
 		}
-	}
+		
+		// Process RPM calculation if capture data is valid
+		if (new_capture_ready) {
+			new_capture_ready = 0;  // Clear flag
+			
+			// Calculate RPM from captured difference
+			if (Difference > 0) {
+				float refClock = TIMCLOCK/(PRESCALAR);
+				float frequency = (refClock/Difference);
+				float rpm_raw = frequency * 60.0f;
+				
+				// Outlier rejection - only accept reasonable changes
+				if (rpm_filtered == 0.0f) {
+					// First reading, accept as is
+					rpm_filtered = rpm_raw;
+				} else {
+					float rpm_diff = rpm_raw - rpm_filtered;
+					if (rpm_diff < 0) rpm_diff = -rpm_diff;  // abs value
+					
+					if (rpm_diff <= MAX_RPM_CHANGE) {
+						// Apply exponential smoothing filter
+						rpm_filtered = (ALPHA_FILTER * rpm_raw) + ((1.0f - ALPHA_FILTER) * rpm_filtered);
+					}
+					// If difference too large, ignore this reading (noise/glitch)
+				}
+				
+				rpm = (int)(rpm_filtered + 0.5f);  // Convert to integer with rounding
+			}
+		}
 	
 	// Check for timeout (no pulses)
 	uint32_t now = HAL_GetTick();
