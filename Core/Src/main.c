@@ -79,6 +79,10 @@ volatile uint32_t period_sum = 0;     // Sum of periods for averaging
 volatile uint8_t period_count = 0;     // Number of periods collected
 volatile uint8_t first_measurement = 1; // Flag for first measurement
 
+// Hysteresis filter variables
+volatile int rpm_previous = 0;         // Previous stable RPM value
+volatile uint8_t stability_counter = 0; // Counter for stable readings
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -94,6 +98,40 @@ int fputc(int ch, FILE *f)
 }
 #define TIMCLOCK   72000000
 #define PRESCALAR  72
+
+// Adaptive hysteresis filter function
+int apply_hysteresis_filter(int new_rpm, int prev_rpm) {
+	// Calculate adaptive threshold based on RPM range
+	int threshold;
+	if (new_rpm < 100) {
+		threshold = 2;        // ±2 for low RPM (30 → 28~32)
+	} else if (new_rpm < 500) {
+		threshold = 3;        // ±3 for medium RPM (300 → 297~303)
+	} else if (new_rpm < 800) {
+		threshold = 4;        // ±4 for high RPM (600 → 596~604)
+	} else {
+		threshold = 5;        // ±5 for very high RPM (1000 → 995~1005)
+	}
+	
+	// Calculate difference
+	int diff = new_rpm - prev_rpm;
+	if (diff < 0) diff = -diff;  // abs value
+	
+	// Apply hysteresis logic
+	if (diff <= threshold) {
+		// Within threshold - maintain previous value for stability
+		stability_counter++;
+		if (stability_counter >= 3) {
+			// After 3 stable readings, allow small updates
+			return prev_rpm + (new_rpm - prev_rpm) / 4;  // Smooth update
+		}
+		return prev_rpm;  // Keep previous value
+	} else {
+		// Outside threshold - real change detected
+		stability_counter = 0;
+		return new_rpm;   // Accept new value
+	}
+}
 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
@@ -204,19 +242,26 @@ int main(void)
 			if (Difference > 0) {
 				float refClock = TIMCLOCK/(PRESCALAR);
 				float frequency = (refClock/Difference);
-				rpm = floor(frequency * 60);
+				int rpm_raw = (int)(frequency * 60.0f);
+				
+				// Apply adaptive hysteresis filter
+				rpm = apply_hysteresis_filter(rpm_raw, rpm_previous);
+				rpm_previous = rpm;
 			}
 		}
 		
 		// Check for timeout (no pulses)
 		uint32_t now = HAL_GetTick();
 		if ((now - last_capture_time) > NO_PULSE_TIMEOUT_MS) {
-			rpm = 0.0f;
+			rpm = 0;
 			// Reset averaging state
 			first_measurement = 1;
 			period_sum = 0;
 			period_count = 0;
 			Is_First_Captured = 0;
+			// Reset hysteresis state
+			rpm_previous = 0;
+			stability_counter = 0;
 		}
 		
 		printf("RPM: %.2f\r\n", rpm);
