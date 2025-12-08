@@ -107,7 +107,7 @@ int apply_hysteresis_filter(int new_rpm, int prev_rpm) {
 	} else if (new_rpm < 500) {
 		threshold = 2;       
 	} else if (new_rpm < 800) {
-		threshold = 5;      
+		threshold = 6;      
 	} else if (new_rpm < 1000) {
 		threshold = 8;       
 	} else {
@@ -119,7 +119,7 @@ int apply_hysteresis_filter(int new_rpm, int prev_rpm) {
 	if (diff < 0) diff = -diff;  // abs value
 	if (diff <= threshold) {
 		stability_counter++;
-		if (stability_counter >= 3) {
+		if (stability_counter >= 5) {
 			return prev_rpm + (new_rpm - prev_rpm) / 4;  // Smooth update
 		}
 		return prev_rpm;  
