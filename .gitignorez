@@ -1,0 +1,32 @@
+# STM32CubeIDE generated files
+/.settings/
+/Debug/
+/Release/
+/build/
+/.project
+.cproject
+*.launch
+*.log
+*.elf
+*.bin
+*.hex
+*.map
+*.o
+*.d
+*.dep
+*.list
+*.srec
+*.su
+*.pyc
+*.swp
+*.bak
+*.tmp
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# User-specific files
+*.user
+*.sublime-workspace
+*.sublime-project
