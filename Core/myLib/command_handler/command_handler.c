@@ -178,6 +178,19 @@ void CommandHandler_InitModbusFromFlash(void) {
     }
 }
 
+void CommandHandler_InitSpeedUnitFromFlash(void) {
+    mySpeedUnitConfig config;
+    myFlash_LoadSpeedUnitConfig(&config);
+    
+    // Check if config is valid (not 0xFF from erased flash)
+    if (config.speed_unit == 0 || config.speed_unit == 1) {
+        current_speed_unit = (config.speed_unit == 0) ? SPEED_UNIT_RPM : SPEED_UNIT_M_MIN;
+    } else {
+        // Use default for uninitialized flash
+        current_speed_unit = SPEED_UNIT_RPM;
+    }
+}
+
 // Command processing functions implementation
 static void Process_BasicCommands(CommandHandler_t *handler, const char* cmd) {
     if (strcmp(cmd, "status") == 0) {
@@ -434,6 +447,77 @@ static void Process_ModbusCommands(CommandHandler_t *handler, const char* cmd) {
         printf("🔗 SLAVE ID: 0x%02X (%d)\r\n", current_slave_id, current_slave_id);
         printf("📡 STATUS: %s\r\n", modbus_enabled ? "ENABLED" : "DISABLED");
         printf("⏱️  TIMEOUT: %lums\r\n", (unsigned long)*handler->config.time);
+        
+        // Display UART3 (Modbus port) configuration details
+        UART_HandleTypeDef* modbus_uart = handler->config.huart3;
+        if (modbus_uart) {
+            printf("=== MODBUS UART3 CONFIG ===\r\n");
+            printf("🔌 BAUD RATE: %lu bps\r\n", (unsigned long)modbus_uart->Init.BaudRate);
+            
+            // Parity information
+            const char* parity_str;
+            switch (modbus_uart->Init.Parity) {
+                case UART_PARITY_NONE: parity_str = "NONE"; break;
+                case UART_PARITY_ODD:  parity_str = "ODD";  break;
+                case UART_PARITY_EVEN: parity_str = "EVEN"; break;
+                default: parity_str = "UNKNOWN"; break;
+            }
+            printf("🔧 PARITY: %s\r\n", parity_str);
+            
+            // Stop bits information
+            const char* stopbits_str;
+            uint8_t stopbits_num;
+            if (modbus_uart->Init.StopBits == UART_STOPBITS_1) {
+                stopbits_str = "1 bit";
+                stopbits_num = 1;
+            } else if (modbus_uart->Init.StopBits == UART_STOPBITS_2) {
+                stopbits_str = "2 bits";
+                stopbits_num = 2;
+            } else {
+                stopbits_str = "UNKNOWN";
+                stopbits_num = 0;
+            }
+            printf("🛑 STOP BITS: %s (%d)\r\n", stopbits_str, stopbits_num);
+            
+            // Word length information
+            const char* wordlen_str;
+            uint8_t wordlen_num;
+            if (modbus_uart->Init.WordLength == UART_WORDLENGTH_8B) {
+                wordlen_str = "8 bits";
+                wordlen_num = 8;
+            } else if (modbus_uart->Init.WordLength == UART_WORDLENGTH_9B) {
+                wordlen_str = "9 bits";
+                wordlen_num = 9;
+            } else {
+                wordlen_str = "UNKNOWN";
+                wordlen_num = 0;
+            }
+            printf("📏 WORD LENGTH: %s (%d)\r\n", wordlen_str, wordlen_num);
+            
+            // Hardware flow control
+            const char* flow_str;
+            switch (modbus_uart->Init.HwFlowCtl) {
+                case UART_HWCONTROL_NONE:    flow_str = "NONE"; break;
+                case UART_HWCONTROL_RTS:     flow_str = "RTS"; break;
+                case UART_HWCONTROL_CTS:     flow_str = "CTS"; break;
+                case UART_HWCONTROL_RTS_CTS: flow_str = "RTS_CTS"; break;
+                default: flow_str = "UNKNOWN"; break;
+            }
+            printf("🌊 FLOW CONTROL: %s\r\n", flow_str);
+            
+            // Mode (TX/RX)
+            const char* mode_str;
+            switch (modbus_uart->Init.Mode) {
+                case UART_MODE_RX:    mode_str = "RX only"; break;
+                case UART_MODE_TX:    mode_str = "TX only"; break;
+                case UART_MODE_TX_RX: mode_str = "TX_RX"; break;
+                default: mode_str = "UNKNOWN"; break;
+            }
+            printf("↔️  MODE: %s\r\n", mode_str);
+            
+            printf("💡 Standard Modbus RTU: 8N1 or 8E1 or 8O1\r\n");
+        }
+        
         if (!modbus_enabled) {
             printf("⚠️  Note: Modbus communication is currently disabled\r\n");
         }
@@ -513,12 +597,32 @@ static void Process_SpeedUnitCommands(CommandHandler_t *handler, const char* cmd
     } else if (strncmp(cmd, "speed_unit rpm", 14) == 0) {
         current_speed_unit = SPEED_UNIT_RPM;
         SetProximitySpeedUnit(0); // 0 = RPM
-        printf("✅ Speed display unit set to RPM (rotations per minute)\r\n");
+        
+        // Save to Flash
+        mySpeedUnitConfig config = {
+            .speed_unit = 0,  // 0 = RPM
+            .reserved = {0, 0, 0}
+        };
+        if (myFlash_SaveSpeedUnitConfig(&config) == HAL_OK) {
+            printf("✅ Speed display unit set to RPM and saved\r\n");
+        } else {
+            printf("✅ Speed display unit set to RPM (save failed)\r\n");
+        }
         printf("🔄 Speed will be displayed as rotational speed\r\n");
     } else if (strncmp(cmd, "speed_unit m/min", 16) == 0) {
         current_speed_unit = SPEED_UNIT_M_MIN;
         SetProximitySpeedUnit(1); // 1 = m/min
-        printf("✅ Speed display unit set to m/min (meters per minute)\r\n");
+        
+        // Save to Flash
+        mySpeedUnitConfig config = {
+            .speed_unit = 1,  // 1 = m/min
+            .reserved = {0, 0, 0}
+        };
+        if (myFlash_SaveSpeedUnitConfig(&config) == HAL_OK) {
+            printf("✅ Speed display unit set to m/min and saved\r\n");
+        } else {
+            printf("✅ Speed display unit set to m/min (save failed)\r\n");
+        }
         printf("📏 Speed will be displayed as linear speed\r\n");
     } else {
         printf("❌ Invalid speed unit. Available: rpm, m/min\r\n");

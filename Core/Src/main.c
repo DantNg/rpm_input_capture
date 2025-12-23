@@ -177,15 +177,48 @@ void ClearProximityHysteresis(void) {
 
 void SaveProximityHysteresis(void) {
     printf("💾 Saving hysteresis table to Flash...\r\n");
-    // TODO: Implement Flash save functionality
-    printf("⚠️  Flash save not implemented yet\r\n");
+    
+    myHysteresisTable table = {0};
+    table.entry_count = proximity_counter.hysteresis_table_size;
+    
+    // Copy entries from proximity counter to Flash structure
+    for (int i = 0; i < table.entry_count && i < 10; i++) {
+        table.entries[i].rpm_threshold = proximity_counter.hysteresis_table[i].rpm_threshold;
+        table.entries[i].hysteresis = proximity_counter.hysteresis_table[i].hysteresis;
+    }
+    
+    if (myFlash_SaveHysteresisTable(&table) == HAL_OK) {
+        printf("✅ Hysteresis table saved successfully (%d entries)\r\n", table.entry_count);
+    } else {
+        printf("❌ Failed to save hysteresis table to Flash\r\n");
+    }
 }
 
 void LoadProximityHysteresis(void) {
     printf("📖 Loading hysteresis table from Flash...\r\n");
-    // TODO: Implement Flash load functionality
-    printf("⚠️  Flash load not implemented yet - using defaults\r\n");
-    ProximityCounter_InitDefaultHysteresis(&proximity_counter);
+    
+    myHysteresisTable table = {0};
+    myFlash_LoadHysteresisTable(&table);
+    
+    // Check if data is valid (not uninitialized Flash)
+    if (table.entry_count <= 10 && table.entry_count > 0) {
+        // Clear current table
+        proximity_counter.hysteresis_table_size = 0;
+        
+        // Load entries from Flash to proximity counter
+        for (int i = 0; i < table.entry_count && i < 10; i++) {
+            // Skip empty entries (threshold = 0 and hysteresis = 0)
+            if (table.entries[i].rpm_threshold != 0xFFFF && table.entries[i].hysteresis != 0xFFFF) {
+                proximity_counter.hysteresis_table[i].rpm_threshold = table.entries[i].rpm_threshold;
+                proximity_counter.hysteresis_table[i].hysteresis = table.entries[i].hysteresis;
+                proximity_counter.hysteresis_table_size++;
+            }
+        }
+        printf("✅ Loaded %d hysteresis entries from Flash\r\n", proximity_counter.hysteresis_table_size);
+    } else {
+        printf("⚠️  Invalid Flash data - using default hysteresis table\r\n");
+        ProximityCounter_InitDefaultHysteresis(&proximity_counter);
+    }
 }
 
 /* USER CODE END PFP */
@@ -481,6 +514,16 @@ int main(void) {
 	modbus_communication_enabled = CommandHandler_IsModbusEnabled();
 	printf("⬇️ Loaded Modbus config from Flash: ID=0x%02X Status=%s\r\n", 
 		   current_modbus_slave_id, modbus_communication_enabled ? "ENABLED" : "DISABLED");
+	
+	// Load Speed Unit configuration from Flash
+	CommandHandler_InitSpeedUnitFromFlash();
+	SpeedDisplayUnit_t loaded_speed_unit = CommandHandler_GetSpeedDisplayUnit();
+	SetProximitySpeedUnit((loaded_speed_unit == SPEED_UNIT_RPM) ? 0 : 1);
+	printf("⬇️ Loaded speed display unit: %s\r\n", 
+		   (loaded_speed_unit == SPEED_UNIT_RPM) ? "RPM" : "m/min");
+	
+	// Load Hysteresis table from Flash
+	LoadProximityHysteresis();
 	
 	// Initialize Command Handler
 	CommandHandler_Config_t cmd_config = {

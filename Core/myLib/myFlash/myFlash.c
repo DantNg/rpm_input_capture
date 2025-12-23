@@ -71,3 +71,57 @@ void myFlash_LoadModbusConfig(myModbusConfig *out)
     out->enabled = (uint8_t)((data >> 8) & 0xFF);
     out->reserved = (uint16_t)((data >> 16) & 0xFFFF);
 }
+
+HAL_StatusTypeDef myFlash_SaveSpeedUnitConfig(const mySpeedUnitConfig *config)
+{
+    uint32_t buffer[1];
+    // Pack config into single 32-bit word: [reserved:24][speed_unit:8]
+    buffer[0] = ((uint32_t)config->reserved[2] << 24) | ((uint32_t)config->reserved[1] << 16) | 
+                ((uint32_t)config->reserved[0] << 8) | (uint32_t)config->speed_unit;
+    return NVS_WriteWords(MYFLASH_PAGE_SPEED_UNIT, buffer, 1U);
+}
+
+void myFlash_LoadSpeedUnitConfig(mySpeedUnitConfig *out)
+{
+    uint32_t data = NVS_ReadWord(MYFLASH_PAGE_SPEED_UNIT);
+    out->speed_unit = (uint8_t)(data & 0xFF);
+    out->reserved[0] = (uint8_t)((data >> 8) & 0xFF);
+    out->reserved[1] = (uint8_t)((data >> 16) & 0xFF);
+    out->reserved[2] = (uint8_t)((data >> 24) & 0xFF);
+}
+
+HAL_StatusTypeDef myFlash_SaveHysteresisTable(const myHysteresisTable *table)
+{
+    // Calculate required size: 1 word for header + 10 entries * 1 word each
+    uint32_t buffer[11];
+    
+    // Pack header: [reserved:24][entry_count:8]
+    buffer[0] = ((uint32_t)table->reserved[2] << 24) | ((uint32_t)table->reserved[1] << 16) | 
+                ((uint32_t)table->reserved[0] << 8) | (uint32_t)table->entry_count;
+    
+    // Pack entries: [hysteresis:16][rpm_threshold:16] per word
+    for (int i = 0; i < 10; i++) {
+        buffer[i + 1] = ((uint32_t)table->entries[i].hysteresis << 16) | 
+                        (uint32_t)table->entries[i].rpm_threshold;
+    }
+    
+    return NVS_WriteWords(MYFLASH_PAGE_HYSTERESIS, buffer, 11U);
+}
+
+void myFlash_LoadHysteresisTable(myHysteresisTable *out)
+{
+    uint32_t buffer[11];
+    NVS_ReadWords(MYFLASH_PAGE_HYSTERESIS, buffer, 11U);
+    
+    // Unpack header
+    out->entry_count = (uint8_t)(buffer[0] & 0xFF);
+    out->reserved[0] = (uint8_t)((buffer[0] >> 8) & 0xFF);
+    out->reserved[1] = (uint8_t)((buffer[0] >> 16) & 0xFF);
+    out->reserved[2] = (uint8_t)((buffer[0] >> 24) & 0xFF);
+    
+    // Unpack entries
+    for (int i = 0; i < 10; i++) {
+        out->entries[i].rpm_threshold = (uint16_t)(buffer[i + 1] & 0xFFFF);
+        out->entries[i].hysteresis = (uint16_t)((buffer[i + 1] >> 16) & 0xFFFF);
+    }
+}

@@ -11,6 +11,8 @@
 #define MYFLASH_PAGE_LENGTH   0x0801FC00U  // single length value
 #define MYFLASH_PAGE_MODE     0x0801F400U  // measurement mode
 #define MYFLASH_PAGE_MODBUS   0x0801F000U  // Modbus configuration
+#define MYFLASH_PAGE_SPEED_UNIT 0x0801E800U  // speed display unit
+#define MYFLASH_PAGE_HYSTERESIS 0x0801E400U  // hysteresis table
 
 // === Data structures ===
 typedef struct {
@@ -31,6 +33,22 @@ typedef struct {
 	uint16_t reserved;        // padding for 4-byte alignment
 } myModbusConfig;
 
+typedef struct {
+	uint8_t speed_unit;       // 0=RPM, 1=m/min
+	uint8_t reserved[3];      // padding for 4-byte alignment
+} mySpeedUnitConfig;
+
+typedef struct {
+	uint16_t rpm_threshold;   // RPM threshold value
+	uint16_t hysteresis;      // hysteresis value
+} myHysteresisEntry;
+
+typedef struct {
+	uint8_t entry_count;      // number of valid entries (0-10)
+	uint8_t reserved[3];      // padding
+	myHysteresisEntry entries[10];  // up to 10 entries
+} myHysteresisTable;
+
 // === High-level helpers built on NVS ===
 HAL_StatusTypeDef myFlash_SaveUARTParams(const myUARTParams *params);
 void               myFlash_LoadUARTParams(myUARTParams *out);
@@ -46,6 +64,12 @@ uint32_t           myFlash_LoadMeasurementMode(void);
 
 HAL_StatusTypeDef myFlash_SaveModbusConfig(const myModbusConfig *config);
 void               myFlash_LoadModbusConfig(myModbusConfig *out);
+
+HAL_StatusTypeDef myFlash_SaveSpeedUnitConfig(const mySpeedUnitConfig *config);
+void               myFlash_LoadSpeedUnitConfig(mySpeedUnitConfig *out);
+
+HAL_StatusTypeDef myFlash_SaveHysteresisTable(const myHysteresisTable *table);
+void               myFlash_LoadHysteresisTable(myHysteresisTable *out);
 
 // === Low-level backward-compatible aliases ===
 #define myFlash_Write(addr, data)      NVS_WriteWord((addr), (data))

@@ -59,6 +59,7 @@ uint8_t CommandHandler_GetModbusSlaveId(void);
 bool CommandHandler_IsModbusEnabled(void);
 void CommandHandler_SetModbusConfig(uint8_t slave_id, bool enabled);
 void CommandHandler_InitModbusFromFlash(void);
+void CommandHandler_InitSpeedUnitFromFlash(void);
 
 #ifdef __cplusplus
 }
