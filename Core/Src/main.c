@@ -53,7 +53,7 @@ uint32_t PPR = 1;
 float DIA = 0.25f;
 uint32_t TIME = 100;
 int64_t pulse_t = 0;
-
+float current_speed=0;
 ////////////////////// Dùng cái này nếu stm32 là MODBUS SLAVE /////////////
 #define SLAVE_ID 0x01
 uint16_t holding_regs[10];
@@ -649,7 +649,7 @@ int main(void) {
 
 		// Display speed according to current unit setting
 		ProximitySpeedUnit_t current_unit = ProximityCounter_GetSpeedUnit(&proximity_counter);
-		float current_speed = ProximityCounter_GetSpeed(&proximity_counter, current_unit);
+		current_speed = ProximityCounter_GetSpeed(&proximity_counter, current_unit);
 		
     static uint32_t last_print_tick = 0;
     uint32_t now = HAL_GetTick();
