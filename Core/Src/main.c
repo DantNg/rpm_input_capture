@@ -177,6 +177,7 @@ void ClearProximityHysteresis(void) {
 
 void SaveProximityHysteresis(void) {
     printf("💾 Saving hysteresis table to Flash...\r\n");
+    printf("🔍 Current table has %d entries:\r\n", proximity_counter.hysteresis_table_size);
     
     myHysteresisTable table = {0};
     table.entry_count = proximity_counter.hysteresis_table_size;
@@ -185,10 +186,17 @@ void SaveProximityHysteresis(void) {
     for (int i = 0; i < table.entry_count && i < 10; i++) {
         table.entries[i].rpm_threshold = proximity_counter.hysteresis_table[i].rpm_threshold;
         table.entries[i].hysteresis = proximity_counter.hysteresis_table[i].hysteresis;
+        printf("  Entry %d: RPM=%d, Hyst=%d\r\n", i, 
+               table.entries[i].rpm_threshold, table.entries[i].hysteresis);
     }
     
     if (myFlash_SaveHysteresisTable(&table) == HAL_OK) {
         printf("✅ Hysteresis table saved successfully (%d entries)\r\n", table.entry_count);
+        
+        // Verify save by reading back
+        myHysteresisTable verify_table = {0};
+        myFlash_LoadHysteresisTable(&verify_table);
+        printf("🔍 Verification: entry_count=%d\r\n", verify_table.entry_count);
     } else {
         printf("❌ Failed to save hysteresis table to Flash\r\n");
     }
@@ -200,25 +208,33 @@ void LoadProximityHysteresis(void) {
     myHysteresisTable table = {0};
     myFlash_LoadHysteresisTable(&table);
     
+    // Debug: Show what was loaded from Flash
+    printf("🔍 Flash data: entry_count=%d (0x%02X)\r\n", table.entry_count, table.entry_count);
+    
     // Check if data is valid (not uninitialized Flash)
-    if (table.entry_count <= 10 && table.entry_count > 0) {
+    // Uninitialized flash will have entry_count = 0xFF (255)
+    if (table.entry_count != 0xFF && table.entry_count <= 10 && table.entry_count > 0) {
         // Clear current table
         proximity_counter.hysteresis_table_size = 0;
         
         // Load entries from Flash to proximity counter
         for (int i = 0; i < table.entry_count && i < 10; i++) {
-            // Skip empty entries (threshold = 0 and hysteresis = 0)
-            if (table.entries[i].rpm_threshold != 0xFFFF && table.entries[i].hysteresis != 0xFFFF) {
+            // Skip entries with invalid data (0xFFFF from uninitialized Flash)
+            if (table.entries[i].rpm_threshold != 0xFFFF && table.entries[i].hysteresis != 0xFFFF &&
+                table.entries[i].rpm_threshold != 0 && table.entries[i].hysteresis != 0) {
                 proximity_counter.hysteresis_table[i].rpm_threshold = table.entries[i].rpm_threshold;
                 proximity_counter.hysteresis_table[i].hysteresis = table.entries[i].hysteresis;
                 proximity_counter.hysteresis_table_size++;
+                printf("  Entry %d: RPM=%d, Hyst=%d\r\n", i, 
+                       table.entries[i].rpm_threshold, table.entries[i].hysteresis);
             }
         }
-        printf("✅ Loaded %d hysteresis entries from Flash\r\n", proximity_counter.hysteresis_table_size);
+        printf("✅ Loaded %d valid hysteresis entries from Flash\r\n", proximity_counter.hysteresis_table_size);
     } else {
-        printf("⚠️  Invalid Flash data - using default hysteresis table\r\n");
+        printf("⚠️  Invalid Flash data (entry_count=%d) - using default hysteresis table\r\n", table.entry_count);
         ProximityCounter_InitDefaultHysteresis(&proximity_counter);
     }
+
 }
 
 /* USER CODE END PFP */
