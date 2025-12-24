@@ -238,13 +238,16 @@ void LoadProximityHysteresis(void) {
 
 }
 
+// Public function for UART3 DMA restart
+void Restart_UART3_DMA(void);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 // Hysteresis filter function now in proximity_counter library
 
-static void Restart_UART3_DMA(void) {
+void Restart_UART3_DMA(void) {
 	HAL_UART_Receive_DMA(&huart3, uart_rx_buffer, UART_RX_BUFFER_SIZE);
 	__HAL_UART_ENABLE_IT(&huart3, UART_IT_IDLE);
 }
@@ -263,18 +266,31 @@ static void Apply_Parity_Config(uint32_t parity_mode) {
 	case 0: // NONE
 		huart1.Init.Parity = UART_PARITY_NONE;
 		huart1.Init.WordLength = UART_WORDLENGTH_8B;
-		huart3.Init.Parity = UART_PARITY_NONE;
-		huart3.Init.WordLength = UART_WORDLENGTH_8B;
 		break;
 	case 1: // ODD
 		huart1.Init.Parity = UART_PARITY_ODD;
 		huart1.Init.WordLength = UART_WORDLENGTH_9B;
-		huart3.Init.Parity = UART_PARITY_ODD;
-		huart3.Init.WordLength = UART_WORDLENGTH_9B;
 		break;
 	case 2: // EVEN
 		huart1.Init.Parity = UART_PARITY_EVEN;
 		huart1.Init.WordLength = UART_WORDLENGTH_9B;
+		break;
+	default:
+		break;
+	}
+}
+
+static void Apply_Modbus_Parity_Config(uint32_t parity_mode) {
+	switch (parity_mode) {
+	case 0: // NONE
+		huart3.Init.Parity = UART_PARITY_NONE;
+		huart3.Init.WordLength = UART_WORDLENGTH_8B;
+		break;
+	case 1: // ODD
+		huart3.Init.Parity = UART_PARITY_ODD;
+		huart3.Init.WordLength = UART_WORDLENGTH_9B;
+		break;
+	case 2: // EVEN
 		huart3.Init.Parity = UART_PARITY_EVEN;
 		huart3.Init.WordLength = UART_WORDLENGTH_9B;
 		break;
@@ -287,20 +303,38 @@ static void Apply_UART_Params(const myUARTParams *p) {
 	if (!p)
 		return;
 	huart1.Init.BaudRate = p->baudRate;
-	huart3.Init.BaudRate = p->baudRate;
 
 	Apply_Parity_Config(p->parity);
 
 	if (p->stopBits == 2U) {
 		huart1.Init.StopBits = UART_STOPBITS_2;
-		huart3.Init.StopBits = UART_STOPBITS_2;
 	} else {
 		huart1.Init.StopBits = UART_STOPBITS_1;
+	}
+
+	// Reinit only UART1
+	HAL_UART_DeInit(&huart1);
+	HAL_UART_Init(&huart1);
+}
+
+static void Apply_Modbus_UART_Params(const myModbusUARTParams *p) {
+	if (!p)
+		return;
+	huart3.Init.BaudRate = p->baudRate;
+
+	Apply_Modbus_Parity_Config(p->parity);
+
+	if (p->stopBits == 2U) {
+		huart3.Init.StopBits = UART_STOPBITS_2;
+	} else {
 		huart3.Init.StopBits = UART_STOPBITS_1;
 	}
 
 	TIME = p->frameTimeoutMs;
-	Reinit_UARTs();
+	// Reinit UART3 and restart DMA
+	HAL_UART_DeInit(&huart3);
+	HAL_UART_Init(&huart3);
+	Restart_UART3_DMA();
 }
 
 static void HoldingRegs_Refresh(void) {
@@ -563,26 +597,45 @@ int main(void) {
 		.encoder = NULL,
 		.htim = &htim2,
 		.slave_id = current_modbus_slave_id};
-	// Load UART params from Flash and apply (simple validity check)
-	myUARTParams saved_uart;
-	myFlash_LoadUARTParams(&saved_uart);
-	if (saved_uart.baudRate != 0xFFFFFFFFU && saved_uart.baudRate >= 2400U && saved_uart.baudRate <= 921600U)
+	// Load UART1 (Command Handler) params from Flash
+	myUARTParams saved_uart1;
+	myFlash_LoadUARTParams(&saved_uart1);
+	if (saved_uart1.baudRate != 0xFFFFFFFFU && saved_uart1.baudRate >= 2400U && saved_uart1.baudRate <= 921600U)
 	{
-		Apply_UART_Params(&saved_uart);
-		// Re-initialize CommandHandler after UART params change
-		CommandHandler_Init(&cmdh, &cmd_config);
+		Apply_UART_Params(&saved_uart1);
 		printf(
-			"⬇️ Loaded UART params from Flash: baud=%lu parity=%lu stop=%lu timeout=%lu ms\r\n",
-			(unsigned long)saved_uart.baudRate, (unsigned long)saved_uart.parity,
-			(unsigned long)saved_uart.stopBits,
-			(unsigned long)saved_uart.frameTimeoutMs);
+			"⬇️ Loaded UART1 params from Flash: baud=%lu parity=%lu stop=%lu\r\n",
+			(unsigned long)saved_uart1.baudRate, (unsigned long)saved_uart1.parity,
+			(unsigned long)saved_uart1.stopBits);
 	}
 	else
 	{
-		myUARTParams def = {115200U, 0U, 1U, TIME};
-		if (myFlash_SaveUARTParams(&def) == HAL_OK)
+		myUARTParams def_uart1 = {115200U, 0U, 1U, 100U}; // Default for UART1
+		if (myFlash_SaveUARTParams(&def_uart1) == HAL_OK)
 		{
-			printf("⚙️ Initialized default UART params and saved to Flash\r\n");
+			printf("⚙️ Initialized default UART1 params and saved to Flash\r\n");
+		}
+	}
+	
+	// Load UART3 (Modbus) params from Flash
+	myModbusUARTParams saved_modbus_uart;
+	myFlash_LoadModbusUARTParams(&saved_modbus_uart);
+	if (saved_modbus_uart.baudRate != 0xFFFFFFFFU && saved_modbus_uart.baudRate >= 2400U && saved_modbus_uart.baudRate <= 921600U)
+	{
+		Apply_Modbus_UART_Params(&saved_modbus_uart);
+		printf(
+			"⬇️ Loaded Modbus UART params from Flash: baud=%lu parity=%lu stop=%lu timeout=%lu ms\r\n",
+			(unsigned long)saved_modbus_uart.baudRate, (unsigned long)saved_modbus_uart.parity,
+			(unsigned long)saved_modbus_uart.stopBits,
+			(unsigned long)saved_modbus_uart.frameTimeoutMs);
+	}
+	else
+	{
+		myModbusUARTParams def_modbus_uart = {115200U, 0U, 1U, 100U}; // Default Modbus: 115200, Even parity
+		Apply_Modbus_UART_Params(&def_modbus_uart);
+		if (myFlash_SaveModbusUARTParams(&def_modbus_uart) == HAL_OK)
+		{
+			printf("⚙️ Initialized default Modbus UART params and saved to Flash\r\n");
 		}
 	}
 

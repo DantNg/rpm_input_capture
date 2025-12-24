@@ -6,6 +6,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+// Forward declaration for UART3 DMA restart function
+void Restart_UART3_DMA(void);
+
 #ifdef __cplusplus
 extern "C" {
 #endif

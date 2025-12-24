@@ -13,6 +13,7 @@
 // Forward declarations for internal functions
 static void Process_BasicCommands(CommandHandler_t *handler, const char* cmd);
 static void Process_UARTCommands(CommandHandler_t *handler, const char* cmd);
+static void Process_ModbusUARTCommands(CommandHandler_t *handler, const char* cmd);
 static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd);
 static void Process_LengthCommands(CommandHandler_t *handler, const char* cmd);
 static void Process_ModeCommands(CommandHandler_t *handler, const char* cmd);
@@ -83,14 +84,17 @@ void CommandHandler_Process(CommandHandler_t *handler) {
                         Process_SpeedUnitCommands(handler, handler->cmd_buffer);
                         command_found = true;
                     }
-                    // Modbus commands
+                    // Modbus commands (check modbus uart first to avoid conflict)
+                    else if (strncmp(handler->cmd_buffer, "modbus uart ", 12) == 0) {
+                        Process_ModbusUARTCommands(handler, handler->cmd_buffer);
+                        command_found = true;
+                    }
                     else if (strncmp(handler->cmd_buffer, "modbus ", 7) == 0 || strcmp(handler->cmd_buffer, "modbus") == 0) {
                         Process_ModbusCommands(handler, handler->cmd_buffer);
                         command_found = true;
                     }
-                    // UART commands with port selection
-                    else if (strncmp(handler->cmd_buffer, "uart1 ", 6) == 0 || 
-                             strncmp(handler->cmd_buffer, "uart3 ", 6) == 0) {
+                    // UART1 commands only
+                    else if (strncmp(handler->cmd_buffer, "uart1 ", 6) == 0) {
                         Process_UARTCommands(handler, handler->cmd_buffer);
                         command_found = true;
                     }
@@ -450,6 +454,113 @@ static void Process_UARTCommands(CommandHandler_t *handler, const char* cmd) {
     }
 }
 
+static void Process_ModbusUARTCommands(CommandHandler_t *handler, const char* cmd) {
+    if (strncmp(cmd, "modbus uart ", 12) == 0) {
+        const char* param_start = cmd + 12;
+        
+        if (strncmp(param_start, "baud ", 5) == 0) {
+            uint32_t baud = atoi(param_start + 5);
+            if (baud >= 2400 && baud <= 921600) {
+                // Save Modbus UART params independently
+                myModbusUARTParams modbus_params;
+                myFlash_LoadModbusUARTParams(&modbus_params);
+                modbus_params.baudRate = baud;
+                
+                handler->config.huart3->Init.BaudRate = baud;
+                HAL_UART_DeInit(handler->config.huart3);
+                HAL_UART_Init(handler->config.huart3);
+                // Restart DMA for UART3
+                Restart_UART3_DMA();
+                
+                if (myFlash_SaveModbusUARTParams(&modbus_params) == HAL_OK) {
+                    printf("✅ Modbus UART BAUD set to %lu and saved\r\n", (unsigned long)baud);
+                } else {
+                    printf("⚠️ Modbus UART BAUD set to %lu but save failed\r\n", (unsigned long)baud);
+                }
+            } else {
+                printf("❌ Invalid baud rate. Range: 2400-921600\r\n");
+            }
+        } else if (strncmp(param_start, "parity ", 7) == 0) {
+            uint32_t par = atoi(param_start + 7);
+            if (par <= 2) {
+                myModbusUARTParams modbus_params;
+                myFlash_LoadModbusUARTParams(&modbus_params);
+                modbus_params.parity = par;
+                
+                // Apply parity to UART3 only
+                switch (par) {
+                    case 0: // NONE
+                        handler->config.huart3->Init.Parity = UART_PARITY_NONE;
+                        handler->config.huart3->Init.WordLength = UART_WORDLENGTH_8B;
+                        break;
+                    case 1: // ODD
+                        handler->config.huart3->Init.Parity = UART_PARITY_ODD;
+                        handler->config.huart3->Init.WordLength = UART_WORDLENGTH_9B;
+                        break;
+                    case 2: // EVEN
+                        handler->config.huart3->Init.Parity = UART_PARITY_EVEN;
+                        handler->config.huart3->Init.WordLength = UART_WORDLENGTH_9B;
+                        break;
+                }
+                HAL_UART_DeInit(handler->config.huart3);
+                HAL_UART_Init(handler->config.huart3);
+                Restart_UART3_DMA();
+                
+                if (myFlash_SaveModbusUARTParams(&modbus_params) == HAL_OK) {
+                    printf("✅ Modbus UART PARITY set to %lu (0=None,1=Odd,2=Even) and saved\r\n", (unsigned long)par);
+                } else {
+                    printf("⚠️ Modbus UART PARITY set to %lu but save failed\r\n", (unsigned long)par);
+                }
+            } else {
+                printf("❌ Invalid parity. Use: 0=None, 1=Odd, 2=Even\r\n");
+            }
+        } else if (strncmp(param_start, "stop ", 5) == 0) {
+            uint32_t stop = atoi(param_start + 5);
+            if (stop == 1 || stop == 2) {
+                myModbusUARTParams modbus_params;
+                myFlash_LoadModbusUARTParams(&modbus_params);
+                modbus_params.stopBits = stop;
+                
+                if (stop == 2) {
+                    handler->config.huart3->Init.StopBits = UART_STOPBITS_2;
+                } else {
+                    handler->config.huart3->Init.StopBits = UART_STOPBITS_1;
+                }
+                HAL_UART_DeInit(handler->config.huart3);
+                HAL_UART_Init(handler->config.huart3);
+                Restart_UART3_DMA();
+                
+                if (myFlash_SaveModbusUARTParams(&modbus_params) == HAL_OK) {
+                    printf("✅ Modbus UART STOP BITS set to %lu and saved\r\n", (unsigned long)stop);
+                } else {
+                    printf("⚠️ Modbus UART STOP BITS set to %lu but save failed\r\n", (unsigned long)stop);
+                }
+            } else {
+                printf("❌ Invalid stop bits. Use: 1 or 2\r\n");
+            }
+        } else if (strncmp(param_start, "timeout ", 8) == 0) {
+            uint32_t timeout = atoi(param_start + 8);
+            if (timeout >= 10 && timeout <= 10000) {
+                myModbusUARTParams modbus_params;
+                myFlash_LoadModbusUARTParams(&modbus_params);
+                modbus_params.frameTimeoutMs = timeout;
+                
+                *handler->config.time = timeout;
+                
+                if (myFlash_SaveModbusUARTParams(&modbus_params) == HAL_OK) {
+                    printf("✅ Modbus FRAME TIMEOUT set to %lu ms and saved\r\n", (unsigned long)timeout);
+                } else {
+                    printf("⚠️ Modbus FRAME TIMEOUT set to %lu ms but save failed\r\n", (unsigned long)timeout);
+                }
+            } else {
+                printf("❌ Invalid timeout. Range: 10-10000 ms\r\n");
+            }
+        } else {
+            printf("❌ Unknown Modbus UART command. Available: baud, parity, stop, timeout\r\n");
+        }
+    }
+}
+
 static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd) {
     if (strncmp(cmd, "ppr ", 4) == 0) {
         uint32_t new_ppr = atoi(cmd + 4);
@@ -789,16 +900,15 @@ static void Show_Help(void) {
     printf("  help         - Show this help\r\n");
     printf("  status       - Show system status\r\n");
     printf("  reset        - System reset\r\n");
-    // printf("MODE:\r\n");
-    // printf("  mode         - Show current measurement mode\r\n");
-    // printf("  mode length  - Switch to length measurement mode\r\n");
-    // printf("  mode rpm     - Switch to RPM measurement mode\r\n");
-    printf("UART CONFIG:\r\n");
-    printf("  uart1 baud <rate>  - Set UART1 baud rate (2400-921600)\r\n");
-    printf("  uart3 baud <rate>  - Set UART3 baud rate (2400-921600)\r\n");
-    printf("  uart1 parity <n>   - Set parity (0=None,1=Odd,2=Even) [global]\r\n");
-    printf("  uart1 stop <n>     - Set UART1 stop bits (1 or 2)\r\n");
-    printf("  uart3 stop <n>     - Set UART3 stop bits (1 or 2)\r\n");
+    printf("UART1 CONFIG (Command Port):\r\n");
+    printf("  uart1 baud <rate>    - Set UART1 baud rate (2400-921600)\r\n");
+    printf("  uart1 parity <n>     - Set UART1 parity (0=None,1=Odd,2=Even)\r\n");
+    printf("  uart1 stop <n>       - Set UART1 stop bits (1 or 2)\r\n");
+    printf("MODBUS UART CONFIG (UART3):\r\n");
+    printf("  modbus uart baud <rate>    - Set Modbus UART baud rate (2400-921600)\r\n");
+    printf("  modbus uart parity <n>     - Set Modbus UART parity (0=None,1=Odd,2=Even)\r\n");
+    printf("  modbus uart stop <n>       - Set Modbus UART stop bits (1 or 2)\r\n");
+    printf("  modbus uart timeout <ms>   - Set Modbus frame timeout (10-10000ms)\r\n");
     printf("ENCODER CONFIG:\r\n");
     printf("  ppr <n>      - Set pulses per revolution (1-10000)\r\n");
     printf("  dia <f>      - Set diameter in meters (0.001-10.0)\r\n");

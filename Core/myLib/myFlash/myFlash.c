@@ -125,3 +125,23 @@ void myFlash_LoadHysteresisTable(myHysteresisTable *out)
         out->entries[i].hysteresis = (uint16_t)((buffer[i + 1] >> 16) & 0xFFFF);
     }
 }
+
+HAL_StatusTypeDef myFlash_SaveModbusUARTParams(const myModbusUARTParams *params)
+{
+    uint32_t buffer[4];
+    buffer[0] = params->baudRate;
+    buffer[1] = params->parity;
+    buffer[2] = params->stopBits;
+    buffer[3] = params->frameTimeoutMs;
+    return NVS_WriteWords(MYFLASH_PAGE_MODBUS + 0x100, buffer, 4U); // Offset from main modbus page
+}
+
+void myFlash_LoadModbusUARTParams(myModbusUARTParams *out)
+{
+    uint32_t buffer[4];
+    NVS_ReadWords(MYFLASH_PAGE_MODBUS + 0x100, buffer, 4U); // Offset from main modbus page
+    out->baudRate       = buffer[0];
+    out->parity         = buffer[1];
+    out->stopBits       = buffer[2];
+    out->frameTimeoutMs = buffer[3];
+}

@@ -34,6 +34,13 @@ typedef struct {
 } myModbusConfig;
 
 typedef struct {
+	uint32_t baudRate;        // Modbus UART baud rate
+	uint32_t parity;          // 0=None, 1=Odd, 2=Even
+	uint32_t stopBits;        // 1 or 2
+	uint32_t frameTimeoutMs;  // Modbus frame timeout
+} myModbusUARTParams;
+
+typedef struct {
 	uint8_t speed_unit;       // 0=RPM, 1=m/min
 	uint8_t reserved[3];      // padding for 4-byte alignment
 } mySpeedUnitConfig;
@@ -64,6 +71,9 @@ uint32_t           myFlash_LoadMeasurementMode(void);
 
 HAL_StatusTypeDef myFlash_SaveModbusConfig(const myModbusConfig *config);
 void               myFlash_LoadModbusConfig(myModbusConfig *out);
+
+HAL_StatusTypeDef myFlash_SaveModbusUARTParams(const myModbusUARTParams *params);
+void               myFlash_LoadModbusUARTParams(myModbusUARTParams *out);
 
 HAL_StatusTypeDef myFlash_SaveSpeedUnitConfig(const mySpeedUnitConfig *config);
 void               myFlash_LoadSpeedUnitConfig(mySpeedUnitConfig *out);
