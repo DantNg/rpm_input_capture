@@ -155,16 +155,13 @@ void ShowProximityHysteresis(void) {
     printf("=== CURRENT HYSTERESIS TABLE ===\r\n");
     printf("Index | RPM Threshold | Hysteresis\r\n");
     printf("------|---------------|----------\r\n");
-    bool has_entries = false;
     for (int i = 0; i < 10; i++) {
         ProximityHysteresisEntry_t entry;
         if (ProximityCounter_GetHysteresisEntry(&proximity_counter, i, &entry)) {
             printf("  %d   |     %5d     |   %3d\r\n", i, entry.rpm_threshold, entry.hysteresis);
-            has_entries = true;
+        } else {
+            printf("  %d   |       ---     |   ---\r\n", i);
         }
-    }
-    if (!has_entries) {
-        printf("   (No entries configured)\r\n");
     }
     printf("💡 Use: hyst set <index> <rpm> <hysteresis>\r\n");
 }
@@ -214,17 +211,21 @@ void LoadProximityHysteresis(void) {
     // Check if data is valid (not uninitialized Flash)
     // Uninitialized flash will have entry_count = 0xFF (255)
     if (table.entry_count != 0xFF && table.entry_count <= 10 && table.entry_count > 0) {
-        // Clear current table
+        // Clear current table completely
         proximity_counter.hysteresis_table_size = 0;
+        memset(proximity_counter.hysteresis_table, 0, sizeof(proximity_counter.hysteresis_table));
         
-        // Load entries from Flash to proximity counter
+        // Load ALL entries from Flash to proximity counter at correct positions
         for (int i = 0; i < table.entry_count && i < 10; i++) {
-            // Skip entries with invalid data (0xFFFF from uninitialized Flash)
+            // Only skip entries with uninitialized Flash data (0xFFFF)
             if (table.entries[i].rpm_threshold != 0xFFFF && table.entries[i].hysteresis != 0xFFFF &&
-                table.entries[i].rpm_threshold != 0 && table.entries[i].hysteresis != 0) {
+                table.entries[i].hysteresis > 0) {  // Allow RPM=0, only check hysteresis > 0
                 proximity_counter.hysteresis_table[i].rpm_threshold = table.entries[i].rpm_threshold;
                 proximity_counter.hysteresis_table[i].hysteresis = table.entries[i].hysteresis;
-                proximity_counter.hysteresis_table_size++;
+                // Update table size to include this entry
+                if (i >= proximity_counter.hysteresis_table_size) {
+                    proximity_counter.hysteresis_table_size = i + 1;
+                }
                 printf("  Entry %d: RPM=%d, Hyst=%d\r\n", i, 
                        table.entries[i].rpm_threshold, table.entries[i].hysteresis);
             }

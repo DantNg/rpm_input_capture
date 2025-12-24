@@ -802,8 +802,7 @@ static void Show_Help(void) {
     printf("  modbus disable   - Disable Modbus communication\r\n");
     printf("HYSTERESIS CONFIG:\r\n");
     printf("  hyst             - Show hysteresis table\r\n");
-    printf("  hyst set <i> <rpm> <h> - Set hysteresis entry\r\n");
-    printf("  hyst add <rpm> <h>     - Add hysteresis entry (auto index)\r\n");
+    printf("  hyst set <i> <rpm> <h> - Set/modify hysteresis entry\r\n");
     printf("  hyst clear       - Clear all entries\r\n");
     printf("  hyst default     - Restore default table\r\n");
     printf("  hyst save/load   - Save/Load to Flash\r\n");
@@ -824,9 +823,13 @@ static void Process_ProximityCommands(CommandHandler_t *handler, const char* cmd
         if (sscanf(params, "%d %d %d", &index, &rpm_threshold, &hysteresis) == 3) {
             if (index >= 0 && index < 10 && rpm_threshold >= 0 && hysteresis > 0 && hysteresis <= 1000) {
                 SetProximityHysteresis(index, rpm_threshold, hysteresis);
+                printf("✅ Hysteresis entry at index %d set to: RPM=%d, Hysteresis=%d\r\n", 
+                       index, rpm_threshold, hysteresis);
+                printf("💡 Use 'hyst show' to view updated table\r\n");
+                printf("💾 Remember to use 'hyst save' to persist changes to flash\r\n");
             } else {
                 printf("❌ Invalid parameters:\r\n");
-                printf("   Index: 0-9\r\n");
+                printf("   Index: 0-9 (overwrites existing or adds new)\r\n");
                 printf("   RPM threshold: >= 0\r\n");
                 printf("   Hysteresis: 1-1000\r\n");
             }
@@ -839,10 +842,14 @@ static void Process_ProximityCommands(CommandHandler_t *handler, const char* cmd
         ClearProximityHysteresis();
         
     } else if (strcmp(cmd, "hyst save") == 0) {
+        printf("💾 Saving hysteresis table...\r\n");
         SaveProximityHysteresis();
+        printf("✅ Save completed. Use 'hyst load' to test or reset to verify persistence.\r\n");
         
     } else if (strcmp(cmd, "hyst load") == 0) {
+        printf("📖 Loading hysteresis table from Flash...\r\n");
         LoadProximityHysteresis();
+        printf("✅ Load completed. Use 'hyst show' to view loaded table.\r\n");
         
     } else if (strcmp(cmd, "hyst default") == 0) {
         printf("🔄 Restoring default hysteresis table...\r\n");
@@ -854,6 +861,7 @@ static void Process_ProximityCommands(CommandHandler_t *handler, const char* cmd
         SetProximityHysteresis(3, 800, 30);
         SetProximityHysteresis(4, 1100, 50);
         printf("✅ Default hysteresis table restored\r\n");
+        printf("💾 Remember to use 'hyst save' to save changes to flash\r\n");
         
     } else if (strncmp(cmd, "hyst add ", 9) == 0) {
         // Parse: hyst add <rpm_threshold> <hysteresis> - automatically find next free index
@@ -862,15 +870,9 @@ static void Process_ProximityCommands(CommandHandler_t *handler, const char* cmd
         
         if (sscanf(params, "%d %d", &rpm_threshold, &hysteresis) == 2) {
             if (rpm_threshold >= 0 && hysteresis > 0 && hysteresis <= 1000) {
-                // Find next available index (simple implementation)
-                static int next_index = 0;
-                if (next_index < 10) {
-                    SetProximityHysteresis(next_index, rpm_threshold, hysteresis);
-                    next_index++;
-                } else {
-                    printf("❌ Hysteresis table full (max 10 entries)\r\n");
-                    printf("💡 Use 'hyst clear' or 'hyst set <index>' to modify existing entries\r\n");
-                }
+                printf("⚠️  Note: 'hyst add' command is deprecated to avoid overwriting existing entries\r\n");
+                printf("💡 Please use 'hyst set <index> %d %d' to specify the exact index\r\n", rpm_threshold, hysteresis);
+                printf("📊 Use 'hyst show' to see current table and available indices\r\n");
             } else {
                 printf("❌ Invalid parameters: RPM >= 0, Hysteresis 1-1000\r\n");
             }
@@ -884,12 +886,14 @@ static void Process_ProximityCommands(CommandHandler_t *handler, const char* cmd
         printf("📚 Available commands:\r\n");
         printf("  hyst              - Show current hysteresis table\r\n");
         printf("  hyst show         - Show current hysteresis table\r\n");
-        printf("  hyst set <i> <rpm> <h> - Set entry at index i\r\n");
-        printf("  hyst add <rpm> <h>     - Add new entry (auto index)\r\n");
+        printf("  hyst set <i> <rpm> <h> - Set/modify entry at index i (0-9)\r\n");
         printf("  hyst clear        - Clear all entries\r\n");
         printf("  hyst default      - Restore default table\r\n");
         printf("  hyst save         - Save table to Flash\r\n");
         printf("  hyst load         - Load table from Flash\r\n");
+        printf("  hyst debug        - Show debug info (internal state)\r\n");
         printf("💡 Parameters: i=index(0-9), rpm=threshold(>=0), h=hysteresis(1-1000)\r\n");
+        printf("💾 Note: 'hyst set' can overwrite existing entries or add new ones\r\n");
+        printf("💾 Always use 'hyst save' after making changes to persist them\r\n");
     }
 }
