@@ -773,10 +773,10 @@ static void Show_Help(void) {
     printf("  help         - Show this help\r\n");
     printf("  status       - Show system status\r\n");
     printf("  reset        - System reset\r\n");
-    printf("MODE:\r\n");
-    printf("  mode         - Show current measurement mode\r\n");
-    printf("  mode length  - Switch to length measurement mode\r\n");
-    printf("  mode rpm     - Switch to RPM measurement mode\r\n");
+    // printf("MODE:\r\n");
+    // printf("  mode         - Show current measurement mode\r\n");
+    // printf("  mode length  - Switch to length measurement mode\r\n");
+    // printf("  mode rpm     - Switch to RPM measurement mode\r\n");
     printf("UART CONFIG:\r\n");
     printf("  uart1 baud <rate>  - Set UART1 baud rate (2400-921600)\r\n");
     printf("  uart3 baud <rate>  - Set UART3 baud rate (2400-921600)\r\n");
