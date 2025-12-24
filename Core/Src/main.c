@@ -239,6 +239,10 @@ void LoadProximityHysteresis(void) {
 
 /* USER CODE END PFP */
 
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
+// Hysteresis filter function now in proximity_counter library
+
 static void Restart_UART3_DMA(void) {
 	HAL_UART_Receive_DMA(&huart3, uart_rx_buffer, UART_RX_BUFFER_SIZE);
 	__HAL_UART_ENABLE_IT(&huart3, UART_IT_IDLE);
@@ -461,10 +465,6 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 		MODBUS_SET_DE_RX();
 	}
 }
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
-// Hysteresis filter function now in proximity_counter library
-
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
 	// Delegate to proximity counter library
 	ProximityCounter_HandleCapture(&proximity_counter, htim);
