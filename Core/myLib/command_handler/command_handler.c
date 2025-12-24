@@ -1,5 +1,6 @@
  #include "command_handler.h"
 #include "../myEncoder/myEncoder.h"
+#include "../myEncoder/proximity_counter.h"
 #include "../myFlash/myFlash.h"
 #include <string.h>
 #include <stdlib.h>
@@ -454,6 +455,11 @@ static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd) 
         uint32_t new_ppr = atoi(cmd + 4);
         if (new_ppr > 0 && new_ppr <= 10000) {
             *handler->config.ppr = new_ppr;
+            
+            // Update proximity counter configuration (same as Modbus handler)
+            extern ProximityCounter_t proximity_counter;
+            ProximityCounter_UpdateConfig(&proximity_counter, *handler->config.ppr, *handler->config.dia);
+            
             if (handler->config.encoder_init) {
                 handler->config.encoder_init(handler->config.encoder, handler->config.htim, 
                                            *handler->config.ppr, *handler->config.dia, *handler->config.time);
@@ -480,6 +486,11 @@ static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd) 
         float new_dia = atof(cmd + 4);
         if (new_dia > 0.001 && new_dia < 10.0) {
             *handler->config.dia = new_dia;
+            
+            // Update proximity counter configuration (same as Modbus handler)
+            extern ProximityCounter_t proximity_counter;
+            ProximityCounter_UpdateConfig(&proximity_counter, *handler->config.ppr, *handler->config.dia);
+            
             if (handler->config.encoder_init) {
                 handler->config.encoder_init(handler->config.encoder, handler->config.htim, 
                                            *handler->config.ppr, *handler->config.dia, *handler->config.time);
@@ -492,6 +503,11 @@ static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd) 
         uint32_t new_time = atoi(cmd + 5);
         if (new_time >= 10 && new_time <= 10000) {
             *handler->config.time = new_time;
+            
+            // Update proximity counter timeout
+            extern ProximityCounter_t proximity_counter;
+            ProximityCounter_SetTimeout(&proximity_counter, new_time * 10);
+            
             if (handler->config.encoder_init) {
                 handler->config.encoder_init(handler->config.encoder, handler->config.htim, 
                                            *handler->config.ppr, *handler->config.dia, *handler->config.time);
