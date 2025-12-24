@@ -103,6 +103,11 @@ void CommandHandler_Process(CommandHandler_t *handler) {
                         Process_ProximityCommands(handler, handler->cmd_buffer);
                         command_found = true;
                     }
+                    // Proximity status command
+                    else if (strcmp(handler->cmd_buffer, "proximity_setting") == 0) {
+                        Process_ProximityCommands(handler, handler->cmd_buffer);
+                        command_found = true;
+                    }
                     // Encoder commands
                     else if (strncmp(handler->cmd_buffer, "ppr ", 4) == 0 || 
                              strncmp(handler->cmd_buffer, "dia ", 4) == 0 ||
@@ -932,6 +937,8 @@ static void Show_Help(void) {
     printf("  hyst clear       - Clear all entries\r\n");
     printf("  hyst default     - Restore default table\r\n");
     printf("  hyst save/load   - Save/Load to Flash\r\n");
+    printf("PROXIMITY STATUS:\r\n");
+    printf("  proximity_status - Show proximity counter configuration\r\n");
 }
 
 /**
@@ -940,6 +947,14 @@ static void Show_Help(void) {
 static void Process_ProximityCommands(CommandHandler_t *handler, const char* cmd) {
     if (strcmp(cmd, "hyst") == 0 || strcmp(cmd, "hyst show") == 0) {
         ShowProximityHysteresis();
+        
+    } else if (strcmp(cmd, "proximity_setting") == 0) {
+        printf("=== PROXIMITY COUNTER SETTING ===\r\n");
+        printf("🔄 PPR=%lu DIA=%.3f TIME=%lums\r\n", 
+               (unsigned long)*handler->config.ppr, 
+               (double)*handler->config.dia, 
+               (unsigned long)*handler->config.time);
+      
         
     } else if (strncmp(cmd, "hyst set ", 9) == 0) {
         // Parse: hyst set <index> <rpm_threshold> <hysteresis>
