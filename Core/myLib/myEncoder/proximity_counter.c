@@ -42,21 +42,33 @@ int ProximityCounter_ApplyHysteresisFilter(ProximityCounter_t *prox_counter,
     int threshold = 50; // Default threshold
     
     // Find appropriate threshold from table
-    for (int i = prox_counter->hysteresis_table_size - 1; i >= 0; i--) {
-        if (new_rpm >= prox_counter->hysteresis_table[i].rpm_threshold) {
-            threshold = prox_counter->hysteresis_table[i].hysteresis;
-            break;
+    if (prox_counter->hysteresis_table_size > 0) {
+        for (int i = (int)prox_counter->hysteresis_table_size - 1; i >= 0; i--) {
+            if (new_rpm >= prox_counter->hysteresis_table[i].rpm_threshold) {
+                threshold = prox_counter->hysteresis_table[i].hysteresis;
+                break;
+            }
         }
     }
 
-    // Calculate absolute difference
+    // Calculate difference
     int diff = new_rpm - prev_rpm;
-    if (diff < 0) diff = -diff;
+    int abs_diff = (diff < 0) ? -diff : diff;
     
-    if (diff <= threshold) {
+    if (abs_diff <= threshold) {
         (*stability_counter)++;
         if (*stability_counter >= 10) {
-            return prev_rpm + (new_rpm - prev_rpm) / 4;  // Smooth update
+            int step = abs_diff / 4;
+            if (step < 1) {
+                step = 1;
+            }
+            if (diff > 0) {
+                return prev_rpm + step;
+            }
+            if (diff < 0) {
+                return prev_rpm - step;
+            }
+            return prev_rpm;
         }
         return prev_rpm;
     } else {
