@@ -119,11 +119,11 @@ bool modbus_master_send_request(ModbusRequest_t *req) {
     MODBUS_SET_DE_TX();
     HAL_Delay(10); // cho tín hiệu ổn định
     // Debug: print transmission frame
-    printf("📤 TX frame (%d bytes): ", len);
-    for(uint16_t i = 0; i < len; i++) {
-        printf("0x%02X ", frame[i]);
-    }
-    printf("\r\n");
+    // printf("📤 TX frame (%d bytes): ", len);
+    // for(uint16_t i = 0; i < len; i++) {
+    //     printf("0x%02X ", frame[i]);
+    // }
+    // printf("\r\n");
     HAL_StatusTypeDef ret = HAL_UART_Transmit(modbus_uart, frame, len, HAL_MAX_DELAY);
   HAL_Delay(10); // cho tín hiệu ổn định
     MODBUS_SET_DE_RX();

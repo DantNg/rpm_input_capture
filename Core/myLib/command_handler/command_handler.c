@@ -550,8 +550,6 @@ static void Process_ModbusUARTCommands(CommandHandler_t *handler, const char* cm
                 myFlash_LoadModbusUARTParams(&modbus_params);
                 modbus_params.frameTimeoutMs = timeout;
                 
-                *handler->config.time = timeout;
-                
                 if (myFlash_SaveModbusUARTParams(&modbus_params) == HAL_OK) {
                     printf("✅ Modbus FRAME TIMEOUT set to %lu ms and saved\r\n", (unsigned long)timeout);
                 } else {
@@ -580,21 +578,18 @@ static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd) 
                 handler->config.encoder_init(handler->config.encoder, handler->config.htim, 
                                            *handler->config.ppr, *handler->config.dia, *handler->config.time);
             }
-            
-            // Save to Flash - need to define myEncoderParams structure
-            typedef struct {
-                uint32_t diameter;
-                uint32_t pulsesPerRev;
-            } myEncoderParams;
-            
-            myEncoderParams enc_params = {
-                .diameter = (uint32_t)(*handler->config.dia * 1000),
-                .pulsesPerRev = *handler->config.ppr
-            };
-            if (handler->config.save_encoder_params && 
-                handler->config.save_encoder_params(&enc_params) == HAL_OK) {
-                printf("✅ PPR set to %lu and saved\r\n", (unsigned long)*handler->config.ppr);
-            }
+
+			myEncoderParams enc_params = {
+				.diameter = (uint32_t)(*handler->config.dia * 1000),
+				.pulsesPerRev = *handler->config.ppr,
+				.sampleTimeMs = *handler->config.time,
+			};
+			if (handler->config.save_encoder_params &&
+				handler->config.save_encoder_params(&enc_params) == HAL_OK) {
+				printf("✅ PPR set to %lu and saved\r\n", (unsigned long)*handler->config.ppr);
+			} else {
+				printf("⚠️ PPR set to %lu but save failed\r\n", (unsigned long)*handler->config.ppr);
+			}
         } else {
             printf("❌ Invalid PPR (1-10000)\r\n");
         }
@@ -611,7 +606,18 @@ static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd) 
                 handler->config.encoder_init(handler->config.encoder, handler->config.htim, 
                                            *handler->config.ppr, *handler->config.dia, *handler->config.time);
             }
-            printf("✅ DIA set to %.3f\r\n", (double)*handler->config.dia);
+
+			myEncoderParams enc_params = {
+				.diameter = (uint32_t)(*handler->config.dia * 1000),
+				.pulsesPerRev = *handler->config.ppr,
+				.sampleTimeMs = *handler->config.time,
+			};
+			if (handler->config.save_encoder_params &&
+				handler->config.save_encoder_params(&enc_params) == HAL_OK) {
+				printf("✅ DIA set to %.3f and saved\r\n", (double)*handler->config.dia);
+			} else {
+				printf("⚠️ DIA set to %.3f but save failed\r\n", (double)*handler->config.dia);
+			}
         } else {
             printf("❌ Invalid diameter (0.001-10.0 meters)\r\n");
         }
@@ -628,7 +634,18 @@ static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd) 
                 handler->config.encoder_init(handler->config.encoder, handler->config.htim, 
                                            *handler->config.ppr, *handler->config.dia, *handler->config.time);
             }
-            printf("✅ SAMPLE TIME set to %lums\r\n", (unsigned long)*handler->config.time);
+
+            myEncoderParams enc_params = {
+                .diameter = (uint32_t)(*handler->config.dia * 1000),
+                .pulsesPerRev = *handler->config.ppr,
+                .sampleTimeMs = *handler->config.time,
+            };
+            if (handler->config.save_encoder_params &&
+                handler->config.save_encoder_params(&enc_params) == HAL_OK) {
+                printf("✅ SAMPLE TIME set to %lums and saved\r\n", (unsigned long)*handler->config.time);
+            } else {
+                printf("⚠️ SAMPLE TIME set to %lums but save failed\r\n", (unsigned long)*handler->config.time);
+            }
         } else {
             printf("❌ Invalid time (10-10000ms)\r\n");
         }
@@ -648,8 +665,23 @@ static void Process_LengthCommands(CommandHandler_t *handler, const char* cmd) {
             printf("✅ Length reset to 0 and saved\r\n");
         }
     } else if (strncmp(cmd, "len_set ", 8) == 0) {
-        printf("❌ len_set command deprecated. Use len_reset to reset length counter.\r\n");
-        printf("   Length is now measured continuously by encoder.\r\n");
+        float new_len_m = (float)atof(cmd + 8);
+        if (new_len_m < 0.0f || new_len_m > 10000.0f) {
+            printf("❌ Invalid length (0-10000 meters)\r\n");
+            return;
+        }
+
+        uint32_t length_mm = (uint32_t)(new_len_m * 1000.0f);
+        Encoder_t* enc = (Encoder_t*)handler->config.encoder;
+        if (enc) {
+            enc->current_length = new_len_m;
+        }
+
+        if (handler->config.save_length && handler->config.save_length(length_mm) == HAL_OK) {
+            printf("✅ Length set to %.3fm and saved\r\n", (double)new_len_m);
+        } else {
+            printf("⚠️ Length set to %.3fm but save failed\r\n", (double)new_len_m);
+        }
     } else if (strcmp(cmd, "len_save") == 0) {
         Encoder_t* enc = (Encoder_t*)handler->config.encoder;
         float current_length = enc ? Encoder_GetCurrentLength(enc) : 0.0f;

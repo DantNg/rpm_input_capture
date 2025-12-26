@@ -21,6 +21,9 @@ HAL_StatusTypeDef NVS_ErasePage(uint32_t pageAddress)
 HAL_StatusTypeDef NVS_WriteWords(uint32_t pageAddress, const uint32_t *words, uint32_t wordCount)
 {
     HAL_StatusTypeDef status;
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+
     HAL_FLASH_Unlock();
 
     FLASH_EraseInitTypeDef eraseInitStruct;
@@ -33,6 +36,7 @@ HAL_StatusTypeDef NVS_WriteWords(uint32_t pageAddress, const uint32_t *words, ui
     status = HAL_FLASHEx_Erase(&eraseInitStruct, &pageError);
     if (status != HAL_OK) {
         HAL_FLASH_Lock();
+        __set_PRIMASK(primask);
         return status;
     }
 
@@ -41,12 +45,14 @@ HAL_StatusTypeDef NVS_WriteWords(uint32_t pageAddress, const uint32_t *words, ui
         status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, addr, words[i]);
         if (status != HAL_OK) {
             HAL_FLASH_Lock();
+            __set_PRIMASK(primask);
             return status;
         }
         addr += 4U;
     }
 
     HAL_FLASH_Lock();
+    __set_PRIMASK(primask);
     return HAL_OK;
 }
 
@@ -62,6 +68,9 @@ void NVS_ReadWords(uint32_t pageAddress, uint32_t *words, uint32_t wordCount)
 HAL_StatusTypeDef NVS_WriteWord(uint32_t address, uint32_t data)
 {
     HAL_StatusTypeDef status;
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+
     HAL_FLASH_Unlock();
 
     FLASH_EraseInitTypeDef erase;
@@ -74,11 +83,13 @@ HAL_StatusTypeDef NVS_WriteWord(uint32_t address, uint32_t data)
     status = HAL_FLASHEx_Erase(&erase, &pageError);
     if (status != HAL_OK) {
         HAL_FLASH_Lock();
+        __set_PRIMASK(primask);
         return status;
     }
 
     status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, address, data);
     HAL_FLASH_Lock();
+    __set_PRIMASK(primask);
     return status;
 }
 

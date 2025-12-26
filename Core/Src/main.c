@@ -330,7 +330,6 @@ static void Apply_Modbus_UART_Params(const myModbusUARTParams *p) {
 		huart3.Init.StopBits = UART_STOPBITS_1;
 	}
 
-	TIME = p->frameTimeoutMs;
 	// Reinit UART3 and restart DMA
 	HAL_UART_DeInit(&huart3);
 	HAL_UART_Init(&huart3);
@@ -357,8 +356,11 @@ static void Handle_Buttons(void) {
 			myFlash_SaveLength(current_length_mm);
 
 			// 2. Save encoder params
-			myEncoderParams enc_params = { .diameter = (uint32_t) (DIA * 1000), // Convert to mm
-					.pulsesPerRev = PPR };
+			myEncoderParams enc_params = {
+					.diameter = (uint32_t) (DIA * 1000), // Convert to mm
+					.pulsesPerRev = PPR,
+					.sampleTimeMs = TIME,
+			};
 			myFlash_SaveEncoderParams(&enc_params);
 
 			// 3. Save UART params
@@ -433,8 +435,8 @@ void on_write_multiple_registers(uint16_t addr, const uint16_t *values,
 		uint16_t quantity) {
 	printf("Master write multi registers!\n");
 }
-void modbus_slave_setup() {
-	ModbusSlaveConfig slave_cfg = { .id = SLAVE_ID, .coils = NULL, .coil_count =
+void modbus_slave_setup(uint8_t slave_id) {
+	ModbusSlaveConfig slave_cfg = { .id = slave_id, .coils = NULL, .coil_count =
 			0, .discrete_inputs = NULL, .discrete_input_count = 0,
 			.holding_registers = holding_regs, .holding_register_count = 10,
 			.input_registers = NULL, .input_register_count = 0, .on_read_coils =
@@ -563,14 +565,14 @@ int main(void) {
 	CommandHandler_InitModbusFromFlash();
 	current_modbus_slave_id = CommandHandler_GetModbusSlaveId();
 	modbus_communication_enabled = CommandHandler_IsModbusEnabled();
-	printf("⬇️ Loaded Modbus config from Flash: ID=0x%02X Status=%s\r\n", 
+	printf("Loaded Modbus config from Flash: ID=0x%02X Status=%s\r\n", 
 		   current_modbus_slave_id, modbus_communication_enabled ? "ENABLED" : "DISABLED");
 	
 	// Load Speed Unit configuration from Flash
 	CommandHandler_InitSpeedUnitFromFlash();
 	SpeedDisplayUnit_t loaded_speed_unit = CommandHandler_GetSpeedDisplayUnit();
 	SetProximitySpeedUnit((loaded_speed_unit == SPEED_UNIT_RPM) ? 0 : 1);
-	printf("⬇️ Loaded speed display unit: %s\r\n", 
+	printf("Loaded speed display unit: %s\r\n", 
 		   (loaded_speed_unit == SPEED_UNIT_RPM) ? "RPM" : "m/min");
 	
 	// Load Hysteresis table from Flash
@@ -646,20 +648,29 @@ int main(void) {
 	{
 		DIA = (float)saved_encoder.diameter / 1000.0f; // Convert from mm to meters
 		PPR = saved_encoder.pulsesPerRev;
-		printf("⬇️ Loaded encoder params from Flash: PPR=%lu DIA=%.3f\r\n",
-			   PPR, (double)DIA);
+		if (saved_encoder.sampleTimeMs != 0xFFFFFFFFU && saved_encoder.sampleTimeMs >= 10U && saved_encoder.sampleTimeMs <= 10000U) {
+			TIME = saved_encoder.sampleTimeMs;
+		}
+		printf("⬇️ Loaded encoder params from Flash: PPR=%lu DIA=%.3f TIME=%lu\r\n",
+			   (unsigned long)PPR, (double)DIA, (unsigned long)TIME);
 	}
 	else
 	{
 		// Initialize with current values if not in flash
 		myEncoderParams def_enc = {
 			.diameter = (uint32_t)(DIA * 1000),
-			.pulsesPerRev = PPR};
+			.pulsesPerRev = PPR,
+			.sampleTimeMs = TIME,
+		};
 		if (myFlash_SaveEncoderParams(&def_enc) == HAL_OK)
 		{
 			printf("⚙️ Initialized default encoder params and saved to Flash\r\n");
 		}
 	}
+
+	// Apply loaded encoder params to proximity counter
+	ProximityCounter_UpdateConfig(&proximity_counter, PPR, DIA);
+	ProximityCounter_SetTimeout(&proximity_counter, TIME * 10U);
 
 	// Initialize length value if not in flash
 	uint32_t saved_length = myFlash_LoadLength();
@@ -699,7 +710,7 @@ int main(void) {
 	HAL_UART_Receive_DMA(&huart3, uart_rx_buffer, UART_RX_BUFFER_SIZE);
 	__HAL_UART_ENABLE_IT(&huart3, UART_IT_IDLE);
 
-	modbus_slave_setup();
+	modbus_slave_setup(current_modbus_slave_id);
 	printf("🔌 Modbus SLAVE mode initialized\r\n");
 	// ----------------- IWDG -------------------------------
 	// Already initialized in MX_IWDG_Init(); keep refreshing in loop

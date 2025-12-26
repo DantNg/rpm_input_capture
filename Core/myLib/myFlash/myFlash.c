@@ -22,18 +22,20 @@ void myFlash_LoadUARTParams(myUARTParams *out)
 
 HAL_StatusTypeDef myFlash_SaveEncoderParams(const myEncoderParams *params)
 {
-    uint32_t buffer[2];
+    uint32_t buffer[3];
     buffer[0] = params->diameter;
     buffer[1] = params->pulsesPerRev;
-    return NVS_WriteWords(MYFLASH_PAGE_ENCODER, buffer, 2U);
+    buffer[2] = params->sampleTimeMs;
+    return NVS_WriteWords(MYFLASH_PAGE_ENCODER, buffer, 3U);
 }
 
 void myFlash_LoadEncoderParams(myEncoderParams *out)
 {
-    uint32_t buffer[2];
-    NVS_ReadWords(MYFLASH_PAGE_ENCODER, buffer, 2U);
+    uint32_t buffer[3];
+    NVS_ReadWords(MYFLASH_PAGE_ENCODER, buffer, 3U);
     out->diameter     = buffer[0];
     out->pulsesPerRev = buffer[1];
+    out->sampleTimeMs = buffer[2];
 }
 
 HAL_StatusTypeDef myFlash_SaveLength(uint32_t length)
@@ -133,13 +135,19 @@ HAL_StatusTypeDef myFlash_SaveModbusUARTParams(const myModbusUARTParams *params)
     buffer[1] = params->parity;
     buffer[2] = params->stopBits;
     buffer[3] = params->frameTimeoutMs;
-    return NVS_WriteWords(MYFLASH_PAGE_MODBUS + 0x100, buffer, 4U); // Offset from main modbus page
+    return NVS_WriteWords(MYFLASH_PAGE_MODBUS_UART, buffer, 4U);
 }
 
 void myFlash_LoadModbusUARTParams(myModbusUARTParams *out)
 {
     uint32_t buffer[4];
-    NVS_ReadWords(MYFLASH_PAGE_MODBUS + 0x100, buffer, 4U); // Offset from main modbus page
+    NVS_ReadWords(MYFLASH_PAGE_MODBUS_UART, buffer, 4U);
+
+    // Backward-compatible fallback (older builds stored at an unaligned offset).
+    // If the new page looks erased, try reading the legacy location.
+    if (buffer[0] == 0xFFFFFFFFU && buffer[1] == 0xFFFFFFFFU && buffer[2] == 0xFFFFFFFFU && buffer[3] == 0xFFFFFFFFU) {
+        NVS_ReadWords(MYFLASH_PAGE_MODBUS + 0x100U, buffer, 4U);
+    }
     out->baudRate       = buffer[0];
     out->parity         = buffer[1];
     out->stopBits       = buffer[2];

@@ -11,6 +11,7 @@
 #define MYFLASH_PAGE_LENGTH   0x0801FC00U  // single length value
 #define MYFLASH_PAGE_MODE     0x0801F400U  // measurement mode
 #define MYFLASH_PAGE_MODBUS   0x0801F000U  // Modbus configuration
+#define MYFLASH_PAGE_MODBUS_UART 0x0801E000U  // Modbus UART configuration (page-aligned)
 #define MYFLASH_PAGE_SPEED_UNIT 0x0801E800U  // speed display unit
 #define MYFLASH_PAGE_HYSTERESIS 0x0801E400U  // hysteresis table
 
@@ -25,6 +26,7 @@ typedef struct {
 typedef struct {
 	uint32_t diameter;        // DIA
 	uint32_t pulsesPerRev;    // PPR
+	uint32_t sampleTimeMs;    // TIME (sample time in ms)
 } myEncoderParams;
 
 typedef struct {
