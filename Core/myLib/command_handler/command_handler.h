@@ -63,7 +63,9 @@ bool CommandHandler_IsModbusEnabled(void);
 void CommandHandler_SetModbusConfig(uint8_t slave_id, bool enabled);
 void CommandHandler_InitModbusFromFlash(void);
 void CommandHandler_InitSpeedUnitFromFlash(void);
-
+void CommandHandler_SetDebugConfig(bool enabled, uint32_t interval_ms);
+void CommandHandler_GetDebugConfig(bool *enabled, uint32_t *interval_ms);
+void CommandHandler_InitDebugConfigFromFlash(void);
 #ifdef __cplusplus
 }
 #endif

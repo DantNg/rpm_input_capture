@@ -63,6 +63,8 @@ int32_t len_val;
 float dia_val;
 uint8_t current_modbus_slave_id = 0x01;  // Will be loaded from Flash
 bool modbus_communication_enabled = true; // Will be loaded from Flash
+bool debug_messages_enabled = true; // Will be loaded from Flash
+uint32_t debug_message_interval_ms = 1000; // Will be loaded from Flash
 // MODBUS MASTER timeout management
 typedef enum {
 	MASTER_IDLE, MASTER_WAITING_RESPONSE
@@ -549,6 +551,12 @@ int main(void) {
 	MX_USART3_UART_Init();
 	MX_IWDG_Init();
 	/* USER CODE BEGIN 2 */
+	//Load Debug Config from Flash
+	CommandHandler_InitDebugConfigFromFlash();
+	CommandHandler_GetDebugConfig(&debug_messages_enabled, &debug_message_interval_ms);
+	printf("Loaded Debug config from Flash: Status=%s Interval=%lu ms\r\n", 
+		   debug_messages_enabled ? "ENABLED" : "DISABLED",
+		   (unsigned long)debug_message_interval_ms);
 	// Initialize proximity counter
 	ProximityCounterConfig_t prox_config = {
 		.ppr = PPR,
@@ -734,7 +742,7 @@ int main(void) {
 		
     static uint32_t last_print_tick = 0;
     uint32_t now = HAL_GetTick();
-    if (now - last_print_tick >= 1000) {
+    if (debug_messages_enabled &&( now - last_print_tick >= debug_message_interval_ms )) {
       last_print_tick = now;
       if (current_unit == PROXIMITY_SPEED_UNIT_RPM) {
         printf("RPM: %.2f\r\n", current_speed);

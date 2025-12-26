@@ -153,3 +153,20 @@ void myFlash_LoadModbusUARTParams(myModbusUARTParams *out)
     out->stopBits       = buffer[2];
     out->frameTimeoutMs = buffer[3];
 }
+
+
+HAL_StatusTypeDef myFlash_SaveDebugConfig(const myDebugConfig *params)
+{
+    uint32_t data[2];
+    data[0] = params->enabled;
+    data[1] = params->interval;
+    return NVS_WriteWords(MYFLASH_PAGE_DEBUG, data, 2U);
+}
+
+void myFlash_LoadDebugConfig(myDebugConfig *out)
+{
+    uint32_t data[2];
+    NVS_ReadWords(MYFLASH_PAGE_DEBUG, data, 2U);
+    out->enabled = data[0];
+    out->interval = data[1];
+}

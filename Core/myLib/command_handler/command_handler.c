@@ -12,6 +12,7 @@
 
 // Forward declarations for internal functions
 static void Process_BasicCommands(CommandHandler_t *handler, const char* cmd);
+static void Process_DebugCommands(CommandHandler_t *handler, const char* cmd);
 static void Process_UARTCommands(CommandHandler_t *handler, const char* cmd);
 static void Process_ModbusUARTCommands(CommandHandler_t *handler, const char* cmd);
 static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd);
@@ -28,7 +29,8 @@ static SpeedDisplayUnit_t current_speed_unit = SPEED_UNIT_RPM;
 // Global Modbus control variables
 static uint8_t current_slave_id = 0x01;  // Default slave ID
 static bool modbus_enabled = true;       // Default enabled
-
+static bool debug_enabled = true;
+static uint32_t debug_interval_ms = 1000;
 // External functions for proximity counter control (defined in main.c)
 extern void SetProximitySpeedUnit(int unit);
 extern void SetProximityHysteresis(int index, int rpm_threshold, int hysteresis);
@@ -72,6 +74,10 @@ void CommandHandler_Process(CommandHandler_t *handler) {
                         strcmp(handler->cmd_buffer, "status") == 0 || strcmp(handler->cmd_buffer, "help") == 0 ||
                         strcmp(handler->cmd_buffer, "reset") == 0) {
                         Process_BasicCommands(handler, handler->cmd_buffer);
+                        command_found = true;
+                    }
+                    else if (strncmp(handler->cmd_buffer, "debug ", 6) == 0 || strcmp(handler->cmd_buffer, "debug") == 0) {
+                        Process_DebugCommands(handler, handler->cmd_buffer);
                         command_found = true;
                     }
                     // Mode commands
@@ -200,6 +206,34 @@ void CommandHandler_InitSpeedUnitFromFlash(void) {
         current_speed_unit = SPEED_UNIT_RPM;
     }
 }
+
+void CommandHandler_SetDebugConfig(bool enabled, uint32_t interval_ms) {
+    debug_enabled = enabled;
+    debug_interval_ms = interval_ms;
+}
+
+void CommandHandler_GetDebugConfig(bool *enabled, uint32_t *interval_ms) {
+    if (enabled) {
+        *enabled = debug_enabled;
+    }
+    if (interval_ms) {
+        *interval_ms = debug_interval_ms;
+    }
+}
+
+void CommandHandler_InitDebugConfigFromFlash(void) {
+    // Load debug config from flash
+    myDebugConfig config;
+    myFlash_LoadDebugConfig(&config);
+    
+    debug_enabled = (config.enabled != 0);
+    if( config.interval > 0 && config.interval <10000 ) {
+        debug_interval_ms = config.interval;
+    } else {
+        debug_interval_ms = 1000; // Default interval
+    }
+}
+
 
 // Command processing functions implementation
 static void Process_BasicCommands(CommandHandler_t *handler, const char* cmd) {
@@ -379,6 +413,48 @@ static void Process_BasicCommands(CommandHandler_t *handler, const char* cmd) {
         HAL_NVIC_SystemReset();
     }
 }
+
+static void Process_DebugCommands(CommandHandler_t *handler, const char* cmd) {
+    myDebugConfig debug_config;
+    myFlash_LoadDebugConfig(&debug_config);
+    
+    if (strcmp(cmd, "debug") == 0) {
+        printf("=== DEBUG CONFIGURATION ===\r\n");
+        printf("DEBUG MESSAGES: %s\r\n", debug_config.enabled ? "ENABLED" : "DISABLED");
+        printf("DEBUG INTERVAL: %lu ms\r\n", (unsigned long)debug_config.interval);
+    } else if (strcmp(cmd, "debug on") == 0) {
+        debug_config.enabled = 1;
+        if (myFlash_SaveDebugConfig(&debug_config) == HAL_OK) {
+            printf("✅ Debug messages ENABLED and saved\r\n Please restart the system to apply changes.\r\n");
+            // CommandHandler_SetDebugConfig(true, debug_config.interval);
+        } else {
+            printf("⚠️ Debug messages ENABLED but save failed\r\n");
+        }
+    } else if (strcmp(cmd, "debug off") == 0) {
+        debug_config.enabled = 0;
+        if (myFlash_SaveDebugConfig(&debug_config) == HAL_OK) {
+            printf("✅ Debug messages DISABLED and saved\r\n Please restart the system to apply changes.\r\n");
+            // CommandHandler_SetDebugConfig(false, debug_config.interval);
+        } else {
+            printf("⚠️ Debug messages DISABLED but save failed\r\n");
+        }
+    } else if (strncmp(cmd, "debug interval ", 15) == 0) {
+        uint32_t interval = atoi(cmd + 15);
+        if (interval >= 100 && interval <= 10000) {
+            debug_config.interval = interval;
+            if (myFlash_SaveDebugConfig(&debug_config) == HAL_OK) {
+                printf("✅ Debug interval set to %lu ms and saved\r\n Please restart the system to apply changes.\r\n", (unsigned long)interval);
+                // CommandHandler_SetDebugConfig(debug_config.enabled != 0, interval);
+            } else {
+                printf("⚠️ Debug interval set to %lu ms but save failed\r\n", (unsigned long)interval);
+            }
+        } else {
+            printf("❌ Invalid interval. Must be between 100 and 10000 ms\r\n");
+        }
+    } else {
+        printf("❌ Unknown debug command. Available: on, off, interval <ms>\r\n");
+    }
+} 
 
 static void Process_UARTCommands(CommandHandler_t *handler, const char* cmd) {
     uint8_t port = 0;
@@ -937,6 +1013,11 @@ static void Show_Help(void) {
     printf("  help         - Show this help\r\n");
     printf("  status       - Show system status\r\n");
     printf("  reset        - System reset\r\n");
+    printf("DEBUG CONFIG:\r\n");
+    printf("  debug            - Show debug settings\r\n");
+    printf("  debug on         - Enable debug messages\r\n");
+    printf("  debug off        - Disable debug messages\r\n");
+    printf("  debug interval <ms> - Set debug message interval (100-10000ms)\r\n");
     printf("UART1 CONFIG (Command Port):\r\n");
     printf("  uart1 baud <rate>    - Set UART1 baud rate (2400-921600)\r\n");
     printf("  uart1 parity <n>     - Set UART1 parity (0=None,1=Odd,2=Even)\r\n");

@@ -14,7 +14,7 @@
 #define MYFLASH_PAGE_MODBUS_UART 0x0801E000U  // Modbus UART configuration (page-aligned)
 #define MYFLASH_PAGE_SPEED_UNIT 0x0801E800U  // speed display unit
 #define MYFLASH_PAGE_HYSTERESIS 0x0801E400U  // hysteresis table
-
+#define MYFLASH_PAGE_DEBUG  0x0801E000U  // debug data
 // === Data structures ===
 typedef struct {
 	uint32_t baudRate;        // e.g., 9600, 115200
@@ -58,6 +58,10 @@ typedef struct {
 	myHysteresisEntry entries[10];  // up to 10 entries
 } myHysteresisTable;
 
+typedef struct {
+	uint32_t enabled;
+	uint32_t interval;
+} myDebugConfig;
 // === High-level helpers built on NVS ===
 HAL_StatusTypeDef myFlash_SaveUARTParams(const myUARTParams *params);
 void               myFlash_LoadUARTParams(myUARTParams *out);
@@ -83,6 +87,8 @@ void               myFlash_LoadSpeedUnitConfig(mySpeedUnitConfig *out);
 HAL_StatusTypeDef myFlash_SaveHysteresisTable(const myHysteresisTable *table);
 void               myFlash_LoadHysteresisTable(myHysteresisTable *out);
 
+HAL_StatusTypeDef myFlash_SaveDebugConfig(const myDebugConfig *log);
+void               myFlash_LoadDebugConfig(myDebugConfig *out);
 // === Low-level backward-compatible aliases ===
 #define myFlash_Write(addr, data)      NVS_WriteWord((addr), (data))
 #define myFlash_Read(addr)             NVS_ReadWord((addr))
