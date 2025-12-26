@@ -6,15 +6,15 @@
 
 // === Page layout (STM32F103C8 default) ===
 // Adjust these addresses if you choose different pages.
-#define MYFLASH_PAGE_UART     0x0801EC00U  // consolidated UART params
-#define MYFLASH_PAGE_ENCODER  0x0801F800U  // DIA + PPR stored together
-#define MYFLASH_PAGE_LENGTH   0x0801FC00U  // single length value
-#define MYFLASH_PAGE_MODE     0x0801F400U  // measurement mode
-#define MYFLASH_PAGE_MODBUS   0x0801F000U  // Modbus configuration
-#define MYFLASH_PAGE_MODBUS_UART 0x0801E000U  // Modbus UART configuration (page-aligned)
-#define MYFLASH_PAGE_SPEED_UNIT 0x0801E800U  // speed display unit
-#define MYFLASH_PAGE_HYSTERESIS 0x0801E400U  // hysteresis table
-#define MYFLASH_PAGE_DEBUG  0x0801E000U  // debug data
+#define MYFLASH_PAGE_ENCODER  		0x0801F800U  // DIA + PPR stored together
+#define MYFLASH_PAGE_LENGTH   		0x0801FC00U  // single length value
+#define MYFLASH_PAGE_MODE     		0x0801F400U  // measurement mode
+#define MYFLASH_PAGE_MODBUS   		0x0801F000U  // Modbus configuration
+#define MYFLASH_PAGE_UART     		0x0801EC00U  // consolidated UART params
+#define MYFLASH_PAGE_SPEED_UNIT 	0x0801E800U  // speed display unit
+#define MYFLASH_PAGE_HYSTERESIS 	0x0801E400U  // hysteresis table
+#define MYFLASH_PAGE_MODBUS_UART 	0x0801E000U  // Modbus UART configuration (page-aligned)
+#define MYFLASH_PAGE_DEBUG 			0x0801DC00U  // debug data
 // === Data structures ===
 typedef struct {
 	uint32_t baudRate;        // e.g., 9600, 115200
@@ -59,8 +59,8 @@ typedef struct {
 } myHysteresisTable;
 
 typedef struct {
-	uint32_t enabled;
-	uint32_t interval;
+	uint16_t interval;
+	uint8_t enabled;
 } myDebugConfig;
 // === High-level helpers built on NVS ===
 HAL_StatusTypeDef myFlash_SaveUARTParams(const myUARTParams *params);

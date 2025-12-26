@@ -546,7 +546,10 @@ static void Process_ModbusUARTCommands(CommandHandler_t *handler, const char* cm
                 myModbusUARTParams modbus_params;
                 myFlash_LoadModbusUARTParams(&modbus_params);
                 modbus_params.baudRate = baud;
-                
+                modbus_params.parity = *handler->config.parity;
+                modbus_params.stopBits = (handler->config.huart3->Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
+                modbus_params.frameTimeoutMs = *handler->config.time;
+                // Apply baud rate to UART3 only
                 handler->config.huart3->Init.BaudRate = baud;
                 HAL_UART_DeInit(handler->config.huart3);
                 HAL_UART_Init(handler->config.huart3);
@@ -567,7 +570,9 @@ static void Process_ModbusUARTCommands(CommandHandler_t *handler, const char* cm
                 myModbusUARTParams modbus_params;
                 myFlash_LoadModbusUARTParams(&modbus_params);
                 modbus_params.parity = par;
-                
+                modbus_params.baudRate = handler->config.huart3->Init.BaudRate;
+                modbus_params.stopBits = (handler->config.huart3->Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
+                modbus_params.frameTimeoutMs = *handler->config.time;
                 // Apply parity to UART3 only
                 switch (par) {
                     case 0: // NONE
@@ -601,7 +606,10 @@ static void Process_ModbusUARTCommands(CommandHandler_t *handler, const char* cm
                 myModbusUARTParams modbus_params;
                 myFlash_LoadModbusUARTParams(&modbus_params);
                 modbus_params.stopBits = stop;
-                
+                modbus_params.baudRate = handler->config.huart3->Init.BaudRate;
+                modbus_params.parity = *handler->config.parity;
+                modbus_params.frameTimeoutMs = *handler->config.time;
+                // Apply stop bits to UART3 only
                 if (stop == 2) {
                     handler->config.huart3->Init.StopBits = UART_STOPBITS_2;
                 } else {
@@ -625,7 +633,10 @@ static void Process_ModbusUARTCommands(CommandHandler_t *handler, const char* cm
                 myModbusUARTParams modbus_params;
                 myFlash_LoadModbusUARTParams(&modbus_params);
                 modbus_params.frameTimeoutMs = timeout;
-                
+                modbus_params.baudRate = handler->config.huart3->Init.BaudRate;
+                modbus_params.parity = *handler->config.parity;
+                modbus_params.stopBits = (handler->config.huart3->Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
+                // Apply timeout to global config
                 if (myFlash_SaveModbusUARTParams(&modbus_params) == HAL_OK) {
                     printf("✅ Modbus FRAME TIMEOUT set to %lu ms and saved\r\n", (unsigned long)timeout);
                 } else {

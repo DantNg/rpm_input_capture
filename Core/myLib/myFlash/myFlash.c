@@ -1,5 +1,6 @@
 #include "myFlash.h"
-
+#include <stdint.h>
+#include<stdio.h>
 HAL_StatusTypeDef myFlash_SaveUARTParams(const myUARTParams *params)
 {
     uint32_t buffer[4];
@@ -14,10 +15,30 @@ void myFlash_LoadUARTParams(myUARTParams *out)
 {
     uint32_t buffer[4];
     NVS_ReadWords(MYFLASH_PAGE_UART, buffer, 4U);
-    out->baudRate       = buffer[0];
-    out->parity         = buffer[1];
-    out->stopBits       = buffer[2];
-    out->frameTimeoutMs = buffer[3];
+    if(buffer[0]>0 && buffer[0]<10000000U) {
+        // Valid baud rate range
+    } else {
+        buffer[0] = 9600U; // Default baud rate
+    }
+    if (buffer[1] <= 2U) {
+        // Valid parity
+    } else {
+        buffer[1] = 0U; // Default to None
+    }
+    if (buffer[2] == 1U || buffer[2] == 2U) {
+        // Valid stop bits
+    } else {
+        buffer[2] = 1U; // Default to 1 stop bit
+    }
+    if (buffer[3] >= 10U && buffer[3] <= 60000U) {
+        // Valid timeout
+    } else {
+        buffer[3] = 1000U; // Default to 1000 ms
+    }
+    // out->baudRate       = buffer[0];
+    // out->parity         = buffer[1];
+    // out->stopBits       = buffer[2];
+    // out->frameTimeoutMs = buffer[3];
 }
 
 HAL_StatusTypeDef myFlash_SaveEncoderParams(const myEncoderParams *params)
@@ -145,8 +166,29 @@ void myFlash_LoadModbusUARTParams(myModbusUARTParams *out)
 
     // Backward-compatible fallback (older builds stored at an unaligned offset).
     // If the new page looks erased, try reading the legacy location.
-    if (buffer[0] == 0xFFFFFFFFU && buffer[1] == 0xFFFFFFFFU && buffer[2] == 0xFFFFFFFFU && buffer[3] == 0xFFFFFFFFU) {
-        NVS_ReadWords(MYFLASH_PAGE_MODBUS + 0x100U, buffer, 4U);
+    // if (buffer[0] == 0xFFFFFFFFU && buffer[1] == 0xFFFFFFFFU && buffer[2] == 0xFFFFFFFFU && buffer[3] == 0xFFFFFFFFU) {
+    //     NVS_ReadWords(MYFLASH_PAGE_MODBUS + 0x100U, buffer, 4U);
+    // }
+    
+    if(buffer[0]>0 && buffer[0]<10000000U) {
+        // Valid baud rate range
+    } else {
+        buffer[0] = 9600U; // Default baud rate
+    }
+    if (buffer[1] <= 2U) {
+        // Valid parity
+    } else {
+        buffer[1] = 0U; // Default to None
+    }
+    if (buffer[2] == 1U || buffer[2] == 2U) {
+        // Valid stop bits
+    } else {
+        buffer[2] = 1U; // Default to 1 stop bit
+    }
+    if (buffer[3] >= 10U && buffer[3] <= 60000U) {
+        // Valid timeout
+    } else {
+        buffer[3] = 1000U; // Default to 1000 ms
     }
     out->baudRate       = buffer[0];
     out->parity         = buffer[1];
@@ -157,16 +199,17 @@ void myFlash_LoadModbusUARTParams(myModbusUARTParams *out)
 
 HAL_StatusTypeDef myFlash_SaveDebugConfig(const myDebugConfig *params)
 {
-    uint32_t data[2];
-    data[0] = params->enabled;
-    data[1] = params->interval;
-    return NVS_WriteWords(MYFLASH_PAGE_DEBUG, data, 2U);
+    uint32_t data;
+    // Pack params into data: [enabled:8][reserved:8][interval:16]
+    data = ((uint32_t)params->enabled << 16) | ((uint32_t)params->interval & 0xFFFF);
+    return NVS_WriteWords(MYFLASH_PAGE_DEBUG, &data, 1U);
 }
 
 void myFlash_LoadDebugConfig(myDebugConfig *out)
 {
-    uint32_t data[2];
-    NVS_ReadWords(MYFLASH_PAGE_DEBUG, data, 2U);
-    out->enabled = data[0];
-    out->interval = data[1];
+    uint32_t data;
+    NVS_ReadWords(MYFLASH_PAGE_DEBUG, &data, 1U);
+    if(data)
+    out->enabled = (uint8_t)((data >> 16) & 0xFF);
+    out->interval = (uint16_t)(data & 0xFFFF);
 }

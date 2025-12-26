@@ -628,26 +628,15 @@ int main(void) {
 	}
 	
 	// Load UART3 (Modbus) params from Flash
-	myModbusUARTParams saved_modbus_uart;
+	myModbusUARTParams saved_modbus_uart  = {115200U, 0U, 1U, 100U};
 	myFlash_LoadModbusUARTParams(&saved_modbus_uart);
-	if (saved_modbus_uart.baudRate != 0xFFFFFFFFU && saved_modbus_uart.baudRate >= 2400U && saved_modbus_uart.baudRate <= 921600U)
-	{
-		Apply_Modbus_UART_Params(&saved_modbus_uart);
-		printf(
-			"⬇️ Loaded Modbus UART params from Flash: baud=%lu parity=%lu stop=%lu timeout=%lu ms\r\n",
-			(unsigned long)saved_modbus_uart.baudRate, (unsigned long)saved_modbus_uart.parity,
-			(unsigned long)saved_modbus_uart.stopBits,
-			(unsigned long)saved_modbus_uart.frameTimeoutMs);
-	}
-	else
-	{
-		myModbusUARTParams def_modbus_uart = {115200U, 0U, 1U, 100U}; // Default Modbus: 115200, Even parity
-		Apply_Modbus_UART_Params(&def_modbus_uart);
-		if (myFlash_SaveModbusUARTParams(&def_modbus_uart) == HAL_OK)
-		{
-			printf("⚙️ Initialized default Modbus UART params and saved to Flash\r\n");
-		}
-	}
+	
+	Apply_Modbus_UART_Params(&saved_modbus_uart);
+	printf(
+		"⬇️ Loaded Modbus UART params from Flash: baud=%lu parity=%lu stop=%lu timeout=%lu ms\r\n",
+		(unsigned long)saved_modbus_uart.baudRate, (unsigned long)saved_modbus_uart.parity,
+		(unsigned long)saved_modbus_uart.stopBits,
+		(unsigned long)saved_modbus_uart.frameTimeoutMs);
 
 	// Load encoder params from Flash and apply
 	myEncoderParams saved_encoder;
