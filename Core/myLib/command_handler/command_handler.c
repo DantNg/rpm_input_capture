@@ -381,7 +381,7 @@ static void Process_BasicCommands(CommandHandler_t *handler, const char* cmd) {
         }
         
         printf("=== MODBUS STATUS ===\r\n");
-        printf("MODBUS: SLAVE_ID=0x%02X TIMEOUT=%lums\r\n", current_slave_id, (unsigned long)*handler->config.time);
+        printf("MODBUS: SLAVE_ID=0x%02X \r\n", current_slave_id);
         printf("MODBUS STATUS: %s\r\n", modbus_enabled ? "ENABLED" : "DISABLED");
         
         if (*handler->config.measurement_mode == MEASUREMENT_MODE_LENGTH) {
@@ -1062,7 +1062,7 @@ static void Show_Help(void) {
     printf("  hyst default     - Restore default table\r\n");
     printf("  hyst save/load   - Save/Load to Flash\r\n");
     printf("PROXIMITY STATUS:\r\n");
-    printf("  proximity_status - Show proximity counter configuration\r\n");
+    printf("  proximity_setting - Show proximity counter configuration\r\n");
 }
 
 /**
