@@ -1070,7 +1070,8 @@ static void Show_Help(void) {
     printf("ENCODER CONFIG:\r\n");
     printf("  ppr <n>      - Set pulses per revolution (1-10000)\r\n");
     printf("  dia <f>      - Set diameter in meters (0.001-10.0)\r\n");
-    printf("  time <ms>    - Set sample time (10-10000ms)\r\n");
+    printf("  sampletime <ms>    - Set sample time (10-10000ms)\r\n");
+    printf("  timeout <ms> - Set encoder timeout (10-10000ms)\r\n");
     printf("LENGTH:\r\n");
     printf("  len_reset    - Reset length to 0\r\n");
     printf("  len_set <f>  - Set length in meters (0-10000)\r\n");
