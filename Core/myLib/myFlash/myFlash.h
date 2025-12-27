@@ -26,6 +26,7 @@ typedef struct {
 typedef struct {
 	uint32_t diameter;        // DIA
 	uint32_t pulsesPerRev;    // PPR
+	uint32_t timeout;		   // timeout for encoder (not always used)
 	uint32_t sampleTimeMs;    // TIME (sample time in ms)
 } myEncoderParams;
 

@@ -52,6 +52,7 @@ CommandHandler_t cmdh;
 uint32_t PPR = 1;
 float DIA = 0.25f;
 uint32_t TIME = 100;
+uint32_t TIMEOUT = 10000U; // Default value, will be updated at runtime
 int64_t pulse_t = 0;
 float current_speed=0;
 ////////////////////// Dùng cái này nếu stm32 là MODBUS SLAVE /////////////
@@ -600,6 +601,7 @@ int main(void) {
 		.ppr = &PPR,
 		.dia = &DIA,
 		.time = &TIME,
+		.timeout = &TIMEOUT,
 		.parity = &parity,
 		.measurement_mode = &current_measurement_mode,
 		.huart1 = &huart1,
@@ -645,6 +647,9 @@ int main(void) {
 	{
 		DIA = (float)saved_encoder.diameter / 1000.0f; // Convert from mm to meters
 		PPR = saved_encoder.pulsesPerRev;
+		if (saved_encoder.timeout != 0xFFFFFFFFU && saved_encoder.timeout >= 1000U && saved_encoder.timeout <= 60000U) {
+			TIMEOUT = saved_encoder.timeout;
+		}
 		if (saved_encoder.sampleTimeMs != 0xFFFFFFFFU && saved_encoder.sampleTimeMs >= 10U && saved_encoder.sampleTimeMs <= 10000U) {
 			TIME = saved_encoder.sampleTimeMs;
 		}
@@ -657,6 +662,7 @@ int main(void) {
 		myEncoderParams def_enc = {
 			.diameter = (uint32_t)(DIA * 1000),
 			.pulsesPerRev = PPR,
+			.timeout = TIMEOUT,
 			.sampleTimeMs = TIME,
 		};
 		if (myFlash_SaveEncoderParams(&def_enc) == HAL_OK)
@@ -667,7 +673,7 @@ int main(void) {
 
 	// Apply loaded encoder params to proximity counter
 	ProximityCounter_UpdateConfig(&proximity_counter, PPR, DIA);
-	ProximityCounter_SetTimeout(&proximity_counter, TIME * 10U);
+	ProximityCounter_SetTimeout(&proximity_counter, TIMEOUT);
 
 	// Initialize length value if not in flash
 	uint32_t saved_length = myFlash_LoadLength();

@@ -35,28 +35,43 @@ void myFlash_LoadUARTParams(myUARTParams *out)
     } else {
         buffer[3] = 1000U; // Default to 1000 ms
     }
-    // out->baudRate       = buffer[0];
-    // out->parity         = buffer[1];
-    // out->stopBits       = buffer[2];
-    // out->frameTimeoutMs = buffer[3];
+    out->baudRate       = buffer[0];
+    out->parity         = buffer[1];
+    out->stopBits       = buffer[2];
+    out->frameTimeoutMs = buffer[3];
 }
 
 HAL_StatusTypeDef myFlash_SaveEncoderParams(const myEncoderParams *params)
 {
-    uint32_t buffer[3];
+    uint32_t buffer[4];
     buffer[0] = params->diameter;
     buffer[1] = params->pulsesPerRev;
-    buffer[2] = params->sampleTimeMs;
-    return NVS_WriteWords(MYFLASH_PAGE_ENCODER, buffer, 3U);
+    buffer[2] = params->timeout;
+    buffer[3] = params->sampleTimeMs;
+
+    return NVS_WriteWords(MYFLASH_PAGE_ENCODER, buffer, 4U);
 }
 
 void myFlash_LoadEncoderParams(myEncoderParams *out)
 {
-    uint32_t buffer[3];
-    NVS_ReadWords(MYFLASH_PAGE_ENCODER, buffer, 3U);
+    uint32_t buffer[4];
+    NVS_ReadWords(MYFLASH_PAGE_ENCODER, buffer, 4U);
+    if (buffer[0] == 0U || buffer[0] > 100000U) {
+        buffer[0] = 1000U; // Default diameter in mm
+    }
+    if (buffer[1] == 0U || buffer[1] > 10000U) {
+        buffer[1] = 1U; // Default PPR 1
+    }
+    if (buffer[2] > 60000U) {
+        buffer[2] = 10000U; // Default 10s timeout in ms
+    }
+    if (buffer[3] < 10U || buffer[3] > 10000U) {
+        buffer[3] = 100U; // Default sample time in 100 ms
+    }
     out->diameter     = buffer[0];
     out->pulsesPerRev = buffer[1];
-    out->sampleTimeMs = buffer[2];
+    out->timeout = buffer[2];
+    out->sampleTimeMs = buffer[3];
 }
 
 HAL_StatusTypeDef myFlash_SaveLength(uint32_t length)

@@ -117,7 +117,8 @@ void CommandHandler_Process(CommandHandler_t *handler) {
                     // Encoder commands
                     else if (strncmp(handler->cmd_buffer, "ppr ", 4) == 0 || 
                              strncmp(handler->cmd_buffer, "dia ", 4) == 0 ||
-                             strncmp(handler->cmd_buffer, "time ", 5) == 0) {
+                             strncmp(handler->cmd_buffer, "sampletime ", 11) == 0||
+                             strncmp(handler->cmd_buffer, "timeout ", 8) == 0) {
                         Process_EncoderCommands(handler, handler->cmd_buffer);
                         command_found = true;
                     }
@@ -663,12 +664,13 @@ static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd) 
             
             if (handler->config.encoder_init) {
                 handler->config.encoder_init(handler->config.encoder, handler->config.htim, 
-                                           *handler->config.ppr, *handler->config.dia, *handler->config.time);
+                                           *handler->config.ppr, *handler->config.dia, *handler->config.timeout, *handler->config.time);
             }
 
 			myEncoderParams enc_params = {
 				.diameter = (uint32_t)(*handler->config.dia * 1000),
 				.pulsesPerRev = *handler->config.ppr,
+                .timeout = *handler->config.timeout,
 				.sampleTimeMs = *handler->config.time,
 			};
 			if (handler->config.save_encoder_params &&
@@ -691,12 +693,13 @@ static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd) 
             
             if (handler->config.encoder_init) {
                 handler->config.encoder_init(handler->config.encoder, handler->config.htim, 
-                                           *handler->config.ppr, *handler->config.dia, *handler->config.time);
+                                           *handler->config.ppr, *handler->config.dia, *handler->config.timeout, *handler->config.time);
             }
 
 			myEncoderParams enc_params = {
 				.diameter = (uint32_t)(*handler->config.dia * 1000),
 				.pulsesPerRev = *handler->config.ppr,
+                .timeout = *handler->config.timeout,
 				.sampleTimeMs = *handler->config.time,
 			};
 			if (handler->config.save_encoder_params &&
@@ -708,23 +711,20 @@ static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd) 
         } else {
             printf("❌ Invalid diameter (0.001-10.0 meters)\r\n");
         }
-    } else if (strncmp(cmd, "time ", 5) == 0) {
-        uint32_t new_time = atoi(cmd + 5);
+    } else if (strncmp(cmd, "sampletime ", 11) == 0){
+        uint32_t new_time = atoi(cmd + 11);
         if (new_time >= 10 && new_time <= 10000) {
             *handler->config.time = new_time;
-            
-            // Update proximity counter timeout
-            extern ProximityCounter_t proximity_counter;
-            ProximityCounter_SetTimeout(&proximity_counter, new_time * 10);
-            
+           
             if (handler->config.encoder_init) {
                 handler->config.encoder_init(handler->config.encoder, handler->config.htim, 
-                                           *handler->config.ppr, *handler->config.dia, *handler->config.time);
+                                           *handler->config.ppr, *handler->config.dia,*handler->config.timeout, *handler->config.time);
             }
 
             myEncoderParams enc_params = {
                 .diameter = (uint32_t)(*handler->config.dia * 1000),
                 .pulsesPerRev = *handler->config.ppr,
+                .timeout = *handler->config.timeout,
                 .sampleTimeMs = *handler->config.time,
             };
             if (handler->config.save_encoder_params &&
@@ -732,6 +732,35 @@ static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd) 
                 printf("✅ SAMPLE TIME set to %lums and saved\r\n", (unsigned long)*handler->config.time);
             } else {
                 printf("⚠️ SAMPLE TIME set to %lums but save failed\r\n", (unsigned long)*handler->config.time);
+            }
+        } else {
+            printf("❌ Invalid time (10-10000ms)\r\n");
+        }
+    }else if (strncmp(cmd, "timeout ", 8) == 0) {
+        uint32_t new_timeout = atoi(cmd + 8);
+        if (new_timeout >= 10 && new_timeout <= 10000) {
+            *handler->config.timeout = new_timeout;
+            
+            // Update proximity counter timeout
+            extern ProximityCounter_t proximity_counter;
+            ProximityCounter_SetTimeout(&proximity_counter, new_timeout * 10);
+            
+            if (handler->config.encoder_init) {
+                handler->config.encoder_init(handler->config.encoder, handler->config.htim, 
+                                           *handler->config.ppr, *handler->config.dia,*handler->config.timeout, *handler->config.time);
+            }
+
+            myEncoderParams enc_params = {
+                .diameter = (uint32_t)(*handler->config.dia * 1000),
+                .pulsesPerRev = *handler->config.ppr,
+                .timeout = *handler->config.timeout,
+                .sampleTimeMs = *handler->config.time,
+            };
+            if (handler->config.save_encoder_params &&
+                handler->config.save_encoder_params(&enc_params) == HAL_OK) {
+                printf("✅ TIMEOUT set to %lums and saved\r\n", (unsigned long)*handler->config.timeout);
+            } else {
+                printf("⚠️ TIMEOUT set to %lums but save failed\r\n", (unsigned long)*handler->config.timeout);
             }
         } else {
             printf("❌ Invalid time (10-10000ms)\r\n");
@@ -800,7 +829,7 @@ static void Process_ModeCommands(CommandHandler_t *handler, const char* cmd) {
         }
         if (handler->config.encoder_init) {
             handler->config.encoder_init(handler->config.encoder, handler->config.htim,
-                                       *handler->config.ppr, *handler->config.dia, *handler->config.time);
+                                       *handler->config.ppr, *handler->config.dia, *handler->config.timeout, *handler->config.time);
         }
     } else if (strncmp(cmd, "mode rpm", 8) == 0) {
         *handler->config.measurement_mode = MEASUREMENT_MODE_RPM;
@@ -813,7 +842,7 @@ static void Process_ModeCommands(CommandHandler_t *handler, const char* cmd) {
         printf("🔄 System now measuring rotational speed\r\n");
         if (handler->config.encoder_init) {
             handler->config.encoder_init(handler->config.encoder, handler->config.htim,
-                                       *handler->config.ppr, *handler->config.dia, *handler->config.time);
+                                       *handler->config.ppr, *handler->config.dia, *handler->config.timeout, *handler->config.time);
         }
     } else if (strcmp(cmd, "mode") == 0) {
         printf("=== CURRENT MODE ===\r\n");

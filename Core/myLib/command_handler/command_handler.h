@@ -21,7 +21,7 @@ typedef struct {
     // Callback function pointers for external dependencies
     void (*reinit_uarts)(void);
     void (*apply_parity_config)(uint32_t parity_mode);
-    void (*encoder_init)(void* enc, void* htim, uint32_t ppr, float dia, uint32_t time);
+    void (*encoder_init)(void* enc, void* htim, uint32_t ppr, float dia, uint32_t timeout, uint32_t time);
     
     // Flash save function pointers
     HAL_StatusTypeDef (*save_uart_params)(const void* params);
@@ -35,6 +35,7 @@ typedef struct {
     uint32_t *ppr;
     float *dia;
     uint32_t *time;
+    uint32_t *timeout;
     // float *length;  // Now handled by encoder library
     uint32_t *parity;
     MeasurementMode_t *measurement_mode;
