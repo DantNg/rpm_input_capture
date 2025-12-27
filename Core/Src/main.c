@@ -29,7 +29,7 @@
 #include <string.h>
 #include "myFlash/myFlash.h"
 #include "command_handler/command_handler.h"
-
+#include <math.h>
 // Declare external callback variable from modbus_master
 extern ModbusResponseCallback modbus_user_on_response;
 
@@ -340,10 +340,11 @@ static void Apply_Modbus_UART_Params(const myModbusUARTParams *p) {
 }
 
 static void HoldingRegs_Refresh(void) {
+	memset(holding_regs, 0, sizeof(holding_regs));
 	holding_regs[0] = PPR;					  // pulses per revolution
 	holding_regs[1] = (uint16_t) (DIA * 1000); // diameter in mm
 	holding_regs[2] = TIME;					  // sample time in ms
-	holding_regs[3] = (uint16_t) ProximityCounter_GetRPM(&proximity_counter); // current RPM
+	holding_regs[3] = (uint16_t) floor(ProximityCounter_GetRPM(&proximity_counter)); // current RPM
 }
 
 
@@ -448,10 +449,10 @@ void modbus_slave_setup(uint8_t slave_id) {
 			.on_write_single_coil = NULL, .on_write_single_register =
 					on_write_single_register, .on_write_multiple_coils = NULL,
 			.on_write_multiple_registers = on_write_multiple_registers };
-
 	modbus_init_slave(&huart3, &slave_cfg, MODBUS_MODE_RTU);
+	memset(holding_regs, 0, sizeof(holding_regs));
 	holding_regs[0] = PPR;		  // số xung
-	holding_regs[1] = DIA * 1000; // đường kính (mm)
+	holding_regs[1] = (uint16_t)(DIA * 1000); // đường kính (mm)
 	holding_regs[2] = TIME;		  // thời gian lấy mẫu(ms)
 	MODBUS_SET_DE_RX();			  // DE = LOW (RX mode)
 }

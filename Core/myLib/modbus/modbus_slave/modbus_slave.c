@@ -4,6 +4,10 @@
 #include "modbus/crc16/crc16.h"
 #include <string.h>
 #include <stdio.h>
+
+// Static buffer for DMA safety - prevents memory corruption
+static uint8_t modbus_tx_buffer[256];
+
 static modbus_slave_config_t slave_cfg;
 static UART_HandleTypeDef *modbus_uart;
 static ModbusSlaveMode slave_mode = MODBUS_SLAVE_MODE_RTU;
@@ -252,23 +256,31 @@ void modbus_slave_handle_frame(const uint8_t *frame, uint16_t len) {
 		uint16_t count = (frame[4] << 8) | frame[5];
 		if (addr + count > slave_cfg.holding_register_count || count == 0)
 			return;
+		
+		// Validate buffer size to prevent overflow
+		if (5 + count * 2 > sizeof(modbus_tx_buffer))
+			return;
+		
 		if (slave_cfg.on_read_holding_registers) {
 			slave_cfg.on_read_holding_registers(addr, count);
 		}
-		uint8_t resp[256];
-		resp[0] = slave_cfg.id;
-		resp[1] = func;
-		resp[2] = count * 2;
+		
+		// Clear the entire static buffer first
+		memset(modbus_tx_buffer, 0, sizeof(modbus_tx_buffer));
+		
+		modbus_tx_buffer[0] = slave_cfg.id;
+		modbus_tx_buffer[1] = func;
+		modbus_tx_buffer[2] = count * 2;
 		for (uint16_t i = 0; i < count; i++) {
-			resp[3 + i * 2] = slave_cfg.holding_registers[addr + i] >> 8;
-			resp[4 + i * 2] = slave_cfg.holding_registers[addr + i] & 0xFF;
+			modbus_tx_buffer[3 + i * 2] = slave_cfg.holding_registers[addr + i] >> 8;
+			modbus_tx_buffer[4 + i * 2] = slave_cfg.holding_registers[addr + i] & 0xFF;
 		}
 
-		uint16_t crc = modbus_crc16(resp, 3 + count * 2);
-		resp[3 + count * 2] = crc & 0xFF;
-		resp[4 + count * 2] = crc >> 8;
+		uint16_t crc = modbus_crc16(modbus_tx_buffer, 3 + count * 2);
+		modbus_tx_buffer[3 + count * 2] = crc & 0xFF;
+		modbus_tx_buffer[4 + count * 2] = crc >> 8;
 
-		send_response(resp, 5 + count * 2);
+		send_response(modbus_tx_buffer, 5 + count * 2);
 		break;
 	}
 	case MODBUS_FUNC_READ_INPUT_REGISTERS: // Read Input Registers
