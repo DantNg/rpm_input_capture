@@ -18,7 +18,7 @@ void myFlash_LoadUARTParams(myUARTParams *out)
     if(buffer[0]>0 && buffer[0]<10000000U) {
         // Valid baud rate range
     } else {
-        buffer[0] = 9600U; // Default baud rate
+        buffer[0] = 115200U; // Default baud rate
     }
     if (buffer[1] <= 2U) {
         // Valid parity

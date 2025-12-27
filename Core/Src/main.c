@@ -530,7 +530,7 @@ int main(void) {
 	/* MCU Configuration--------------------------------------------------------*/
 
 	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-	HAL_Init();
+ 	HAL_Init();
 
 	/* USER CODE BEGIN Init */
 
@@ -553,21 +553,21 @@ int main(void) {
 	MX_IWDG_Init();
 	/* USER CODE BEGIN 2 */
 	//Load Debug Config from Flash
-	CommandHandler_InitDebugConfigFromFlash();
-	CommandHandler_GetDebugConfig(&debug_messages_enabled, &debug_message_interval_ms);
-	printf("Loaded Debug config from Flash: Status=%s Interval=%lu ms\r\n", 
-		   debug_messages_enabled ? "ENABLED" : "DISABLED",
-		   (unsigned long)debug_message_interval_ms);
+
 	// Initialize proximity counter
 	ProximityCounterConfig_t prox_config = {
 		.ppr = PPR,
 		.diameter = DIA,
-		.timeout_ms = 10000,  // 10 seconds
+		.timeout_ms = TIMEOUT,
 		.averaging_samples = 3
 	};
 	ProximityCounter_Init(&proximity_counter, &prox_config, &htim2);
 	ProximityCounter_Start(&proximity_counter);
-	
+	CommandHandler_InitDebugConfigFromFlash();
+		CommandHandler_GetDebugConfig(&debug_messages_enabled, &debug_message_interval_ms);
+		printf("Loaded Debug config from Flash: Status=%s Interval=%lu ms\r\n",
+			   debug_messages_enabled ? "ENABLED" : "DISABLED",
+			   (unsigned long)debug_message_interval_ms);
 	setvbuf(stdin, NULL, _IONBF, 0);
 	
 	// Load Modbus configuration from Flash FIRST
@@ -653,8 +653,8 @@ int main(void) {
 		if (saved_encoder.sampleTimeMs != 0xFFFFFFFFU && saved_encoder.sampleTimeMs >= 10U && saved_encoder.sampleTimeMs <= 10000U) {
 			TIME = saved_encoder.sampleTimeMs;
 		}
-		printf("⬇️ Loaded encoder params from Flash: PPR=%lu DIA=%.3f TIME=%lu\r\n",
-			   (unsigned long)PPR, (double)DIA, (unsigned long)TIME);
+		printf("⬇️ Loaded encoder params from Flash: PPR=%lu DIA=%.3f SAMPLETIME=%lums TIMEOUT=%lums\r\n",
+			   (unsigned long)PPR, (double)DIA, (unsigned long)TIME, (unsigned long)TIMEOUT);
 	}
 	else
 	{
@@ -817,8 +817,8 @@ static void MX_IWDG_Init(void) {
 
 	/* USER CODE END IWDG_Init 1 */
 	hiwdg.Instance = IWDG;
-	hiwdg.Init.Prescaler = IWDG_PRESCALER_64;
-	hiwdg.Init.Reload = 2499;
+	hiwdg.Init.Prescaler = IWDG_PRESCALER_256;
+	hiwdg.Init.Reload = 4095;
 	if (HAL_IWDG_Init(&hiwdg) != HAL_OK) {
 		Error_Handler();
 	}
