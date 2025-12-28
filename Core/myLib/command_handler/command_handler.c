@@ -738,7 +738,7 @@ static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd) 
         }
     }else if (strncmp(cmd, "timeout ", 8) == 0) {
         uint32_t new_timeout = atoi(cmd + 8);
-        if (new_timeout >= 10 && new_timeout <= 100000) {
+        if (new_timeout >= 10 && new_timeout <= 60000) {
             *handler->config.timeout = new_timeout;
             
             // Update proximity counter timeout
@@ -763,7 +763,7 @@ static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd) 
                 printf("⚠️ TIMEOUT set to %lums but save failed\r\n", (unsigned long)*handler->config.timeout);
             }
         } else {
-            printf("❌ Invalid time (10-100000ms)\r\n");
+            printf("❌ Invalid time (10-60000ms)\r\n");
         }
     }
 }
@@ -1071,7 +1071,7 @@ static void Show_Help(void) {
     printf("  ppr <n>      - Set pulses per revolution (1-10000)\r\n");
     printf("  dia <f>      - Set diameter in meters (0.001-10.0)\r\n");
     printf("  sampletime <ms>    - Set sample time (10-10000ms)\r\n");
-    printf("  timeout <ms> - Set encoder timeout (10-10000ms)\r\n");
+    printf("  timeout <ms> - Set encoder timeout (10-60000ms)\r\n");
     printf("LENGTH:\r\n");
     printf("  len_reset    - Reset length to 0\r\n");
     printf("  len_set <f>  - Set length in meters (0-10000)\r\n");
@@ -1103,7 +1103,6 @@ static void Process_ProximityCommands(CommandHandler_t *handler, const char* cmd
         ShowProximityHysteresis();
         
     } else if (strcmp(cmd, "proximity_setting") == 0) {
-        printf("=== PROXIMITY COUNTER SETTING : \t");
         printf("PPR=%lu DIA=%.3f SAMPLE TIME=%lums TIMEOUT=%lums\r\n", 
                (unsigned long)*handler->config.ppr, 
                (double)*handler->config.dia, 
