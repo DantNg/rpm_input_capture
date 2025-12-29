@@ -380,62 +380,62 @@ static void Apply_Modbus_UART_Params(const myModbusUARTParams *p)
 	Restart_UART3_DMA();
 }
 
-static void HoldingRegs_Refresh(void)
-{
-	memset(holding_regs, 0, sizeof(holding_regs));
-	holding_regs[0] = PPR;															// pulses per revolution
-	holding_regs[1] = (uint16_t)(DIA * 1000);										// diameter in mm
-	holding_regs[2] = TIME;															// sample time in ms
-	holding_regs[3] = (uint16_t)floor(ProximityCounter_GetRPM(&proximity_counter)); // current RPM
-}
+// static void HoldingRegs_Refresh(void)
+// {
+// 	memset(holding_regs, 0, sizeof(holding_regs));
+// 	holding_regs[0] = PPR;															// pulses per revolution
+// 	holding_regs[1] = (uint16_t)(DIA * 1000);										// diameter in mm
+// 	holding_regs[2] = TIME;															// sample time in ms
+// 	holding_regs[3] = (uint16_t)floor(ProximityCounter_GetRPM(&proximity_counter)); // current RPM
+// }
 
-static void Handle_Buttons(void)
-{
-	static bool emergency_save_done = false;
+// static void Handle_Buttons(void)
+// {
+// 	static bool emergency_save_done = false;
 
-	if (HAL_GPIO_ReadPin(POWER_STATUS_GPIO_PORT, POWER_STATUS_PIN) == GPIO_PIN_SET)
-	{
-		// Power loss detected - emergency save all critical parameters
-		if (!emergency_save_done)
-		{
-			// 1. Save current length (highest priority - measurement data)
-			uint32_t current_length_mm = 0;
-			myFlash_SaveLength(current_length_mm);
+// 	if (HAL_GPIO_ReadPin(POWER_STATUS_GPIO_PORT, POWER_STATUS_PIN) == GPIO_PIN_SET)
+// 	{
+// 		// Power loss detected - emergency save all critical parameters
+// 		if (!emergency_save_done)
+// 		{
+// 			// 1. Save current length (highest priority - measurement data)
+// 			uint32_t current_length_mm = 0;
+// 			myFlash_SaveLength(current_length_mm);
 
-			// 2. Save encoder params
-			myEncoderParams enc_params = {
-				.diameter = (uint32_t)(DIA * 1000), // Convert to mm
-				.pulsesPerRev = PPR,
-				.sampleTimeMs = TIME,
-			};
-			myFlash_SaveEncoderParams(&enc_params);
+// 			// 2. Save encoder params
+// 			myEncoderParams enc_params = {
+// 				.diameter = (uint32_t)(DIA * 1000), // Convert to mm
+// 				.pulsesPerRev = PPR,
+// 				.sampleTimeMs = TIME,
+// 			};
+// 			myFlash_SaveEncoderParams(&enc_params);
 
-			// 3. Save UART params
-			myUARTParams p;
-			p.baudRate = huart3.Init.BaudRate;
-			p.parity = parity;
-			p.stopBits = (huart3.Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
-			p.frameTimeoutMs = TIME;
-			myFlash_SaveUARTParams(&p);
+// 			// 3. Save UART params
+// 			myUARTParams p;
+// 			p.baudRate = huart3.Init.BaudRate;
+// 			p.parity = parity;
+// 			p.stopBits = (huart3.Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
+// 			p.frameTimeoutMs = TIME;
+// 			myFlash_SaveUARTParams(&p);
 
-			emergency_save_done = true;
-		}
+// 			emergency_save_done = true;
+// 		}
 
-		// Minimal delay to debounce, then wait for power restoration or complete loss
-		uint32_t start_time = HAL_GetTick();
-		while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) == GPIO_PIN_SET && (HAL_GetTick() - start_time) < 100)
-		{
-			// Keep watchdog alive during power loss event
-			HAL_IWDG_Refresh(&hiwdg);
-		}
+// 		// Minimal delay to debounce, then wait for power restoration or complete loss
+// 		uint32_t start_time = HAL_GetTick();
+// 		while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) == GPIO_PIN_SET && (HAL_GetTick() - start_time) < 100)
+// 		{
+// 			// Keep watchdog alive during power loss event
+// 			HAL_IWDG_Refresh(&hiwdg);
+// 		}
 
-		// Reset flag when power is restored
-		if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) == GPIO_PIN_RESET)
-		{
-			emergency_save_done = false;
-		}
-	}
-}
+// 		// Reset flag when power is restored
+// 		if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) == GPIO_PIN_RESET)
+// 		{
+// 			emergency_save_done = false;
+// 		}
+// 	}
+// }
 
 void HAL_UART_IDLE_Callback(UART_HandleTypeDef *huart)
 {
@@ -782,7 +782,7 @@ int main(void)
 			}
 		}
 		// HoldingRegs_Refresh();
-		Handle_Buttons();
+		// Handle_Buttons();
 
 		queue_frame_t frame;
 		if (queue_pop(&frame))

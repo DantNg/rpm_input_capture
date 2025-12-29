@@ -52,7 +52,6 @@ void CommandHandler_Process(CommandHandler_t *handler) {
     if (!handler || !handler->config.huart) return;
     
     if (handler->show_prompt) {
-        printf("\r\nCmd> ");
         handler->show_prompt = false;
     }
     
