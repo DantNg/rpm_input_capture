@@ -49,6 +49,8 @@ CommandHandler_t cmdh;
 // Chọn chế độ hoạt động
 // #define MODBUS_MASTER
 #define MODBUS_SLAVE
+#define MODBUS_PORT huart3
+#define COMMAND_PORT huart1
 uint32_t PPR = 1;
 float DIA = 0.25f;
 uint32_t TIME = 100;
@@ -108,7 +110,7 @@ DMA_HandleTypeDef hdma_usart3_tx;
 
 PUTCHAR_PROTOTYPE
 {
-	HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
+	HAL_UART_Transmit(&COMMAND_PORT, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
 	return ch;
 }
 
@@ -117,10 +119,10 @@ GETCHAR_PROTOTYPE
 	uint8_t ch = 0;
 
 	/* Clear the Overrun flag just before receiving the first character */
-	__HAL_UART_CLEAR_OREFLAG(&huart1);
+	__HAL_UART_CLEAR_OREFLAG(&COMMAND_PORT);
 
 	/* Wait for reception of a character on the USART RX line - NO ECHO */
-	HAL_UART_Receive(&huart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
+	HAL_UART_Receive(&COMMAND_PORT, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
 	// Removed echo to prevent double character display
 	return ch;
 }
@@ -269,7 +271,7 @@ void LoadProximityHysteresis(void)
 }
 
 // Public function for UART3 DMA restart
-void Restart_UART3_DMA(void);
+void Restart_MODBUS_DMA(void);
 
 /* USER CODE END PFP */
 
@@ -277,19 +279,19 @@ void Restart_UART3_DMA(void);
 /* USER CODE BEGIN 0 */
 // Hysteresis filter function now in proximity_counter library
 
-void Restart_UART3_DMA(void)
+void Restart_MODBUS_DMA(void)
 {
-	HAL_UART_Receive_DMA(&huart3, uart_rx_buffer, UART_RX_BUFFER_SIZE);
-	__HAL_UART_ENABLE_IT(&huart3, UART_IT_IDLE);
+	HAL_UART_Receive_DMA(&MODBUS_PORT, uart_rx_buffer, UART_RX_BUFFER_SIZE);
+	__HAL_UART_ENABLE_IT(&MODBUS_PORT, UART_IT_IDLE);
 }
 
 static void Reinit_UARTs(void)
 {
-	HAL_UART_DeInit(&huart1);
-	HAL_UART_Init(&huart1);
-	HAL_UART_DeInit(&huart3);
-	HAL_UART_Init(&huart3);
-	Restart_UART3_DMA();
+	HAL_UART_DeInit(&COMMAND_PORT);
+	HAL_UART_Init(&COMMAND_PORT);
+	HAL_UART_DeInit(&MODBUS_PORT);
+	HAL_UART_Init(&MODBUS_PORT);
+	Restart_MODBUS_DMA();
 	// UART1 now uses scanf - no interrupt setup needed
 }
 
@@ -298,16 +300,16 @@ static void Apply_Parity_Config(uint32_t parity_mode)
 	switch (parity_mode)
 	{
 	case 0: // NONE
-		huart1.Init.Parity = UART_PARITY_NONE;
-		huart1.Init.WordLength = UART_WORDLENGTH_8B;
+		COMMAND_PORT.Init.Parity = UART_PARITY_NONE;
+		COMMAND_PORT.Init.WordLength = UART_WORDLENGTH_8B;
 		break;
 	case 1: // ODD
-		huart1.Init.Parity = UART_PARITY_ODD;
-		huart1.Init.WordLength = UART_WORDLENGTH_9B;
+		COMMAND_PORT.Init.Parity = UART_PARITY_ODD;
+		COMMAND_PORT.Init.WordLength = UART_WORDLENGTH_9B;
 		break;
 	case 2: // EVEN
-		huart1.Init.Parity = UART_PARITY_EVEN;
-		huart1.Init.WordLength = UART_WORDLENGTH_9B;
+		COMMAND_PORT.Init.Parity = UART_PARITY_EVEN;
+		COMMAND_PORT.Init.WordLength = UART_WORDLENGTH_9B;
 		break;
 	default:
 		break;
@@ -319,16 +321,16 @@ static void Apply_Modbus_Parity_Config(uint32_t parity_mode)
 	switch (parity_mode)
 	{
 	case 0: // NONE
-		huart3.Init.Parity = UART_PARITY_NONE;
-		huart3.Init.WordLength = UART_WORDLENGTH_8B;
+		MODBUS_PORT.Init.Parity = UART_PARITY_NONE;
+		MODBUS_PORT.Init.WordLength = UART_WORDLENGTH_8B;
 		break;
 	case 1: // ODD
-		huart3.Init.Parity = UART_PARITY_ODD;
-		huart3.Init.WordLength = UART_WORDLENGTH_9B;
+		MODBUS_PORT.Init.Parity = UART_PARITY_ODD;
+		MODBUS_PORT.Init.WordLength = UART_WORDLENGTH_9B;
 		break;
 	case 2: // EVEN
-		huart3.Init.Parity = UART_PARITY_EVEN;
-		huart3.Init.WordLength = UART_WORDLENGTH_9B;
+		MODBUS_PORT.Init.Parity = UART_PARITY_EVEN;
+		MODBUS_PORT.Init.WordLength = UART_WORDLENGTH_9B;
 		break;
 	default:
 		break;
@@ -339,45 +341,45 @@ static void Apply_UART_Params(const myUARTParams *p)
 {
 	if (!p)
 		return;
-	huart1.Init.BaudRate = p->baudRate;
+	COMMAND_PORT.Init.BaudRate = p->baudRate;
 
 	Apply_Parity_Config(p->parity);
 
 	if (p->stopBits == 2U)
 	{
-		huart1.Init.StopBits = UART_STOPBITS_2;
+		COMMAND_PORT.Init.StopBits = UART_STOPBITS_2;
 	}
 	else
 	{
-		huart1.Init.StopBits = UART_STOPBITS_1;
+		COMMAND_PORT.Init.StopBits = UART_STOPBITS_1;
 	}
 
 	// Reinit only UART1
-	HAL_UART_DeInit(&huart1);
-	HAL_UART_Init(&huart1);
+	HAL_UART_DeInit(&COMMAND_PORT);
+	HAL_UART_Init(&COMMAND_PORT);
 }
 
 static void Apply_Modbus_UART_Params(const myModbusUARTParams *p)
 {
 	if (!p)
 		return;
-	huart3.Init.BaudRate = p->baudRate;
+	MODBUS_PORT.Init.BaudRate = p->baudRate;
 
 	Apply_Modbus_Parity_Config(p->parity);
 
 	if (p->stopBits == 2U)
 	{
-		huart3.Init.StopBits = UART_STOPBITS_2;
+		MODBUS_PORT.Init.StopBits = UART_STOPBITS_2;
 	}
 	else
 	{
-		huart3.Init.StopBits = UART_STOPBITS_1;
+		MODBUS_PORT.Init.StopBits = UART_STOPBITS_1;
 	}
 
 	// Reinit UART3 and restart DMA
-	HAL_UART_DeInit(&huart3);
-	HAL_UART_Init(&huart3);
-	Restart_UART3_DMA();
+	HAL_UART_DeInit(&MODBUS_PORT);
+	HAL_UART_Init(&MODBUS_PORT);
+	Restart_MODBUS_DMA();
 }
 
 // static void HoldingRegs_Refresh(void)
@@ -412,9 +414,9 @@ static void Apply_Modbus_UART_Params(const myModbusUARTParams *p)
 
 // 			// 3. Save UART params
 // 			myUARTParams p;
-// 			p.baudRate = huart3.Init.BaudRate;
+// 			p.baudRate = MODBUS_PORT.Init.BaudRate;
 // 			p.parity = parity;
-// 			p.stopBits = (huart3.Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
+// 			p.stopBits = (MODBUS_PORT.Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
 // 			p.frameTimeoutMs = TIME;
 // 			myFlash_SaveUARTParams(&p);
 
@@ -516,7 +518,7 @@ void modbus_slave_setup(uint8_t slave_id)
 		.on_write_single_register = on_write_single_register,
 		.on_write_multiple_coils = NULL,
 		.on_write_multiple_registers = on_write_multiple_registers};
-	modbus_init_slave(&huart3, &slave_cfg, MODBUS_MODE_RTU);
+	modbus_init_slave(&MODBUS_PORT, &slave_cfg, MODBUS_MODE_RTU);
 	memset(holding_regs, 0, sizeof(holding_regs));
 	// holding_regs[0] = PPR;		  // số xung
 	// holding_regs[1] = (uint16_t)(DIA * 1000); // đường kính (mm)
@@ -618,7 +620,7 @@ int main(void)
 
 	// Initialize Command Handler
 	CommandHandler_Config_t cmd_config = {
-		.huart = &huart1,
+		.huart = &COMMAND_PORT,
 		.reinit_uarts = Reinit_UARTs,
 		.apply_parity_config = Apply_Parity_Config,
 		.encoder_init = NULL, // No encoder init needed - using proximity counter
@@ -633,8 +635,8 @@ int main(void)
 		.timeout = &TIMEOUT,
 		.parity = &parity,
 		.measurement_mode = &current_measurement_mode,
-		.huart1 = &huart1,
-		.huart3 = &huart3,
+		.command_port = &COMMAND_PORT,
+		.modbus_port = &MODBUS_PORT,
 		.encoder = NULL,
 		.htim = &htim2,
 		.slave_id = current_modbus_slave_id};
@@ -741,8 +743,8 @@ int main(void)
 	}
 
 	// ----------------- UART3 -----------------------------
-	HAL_UART_Receive_DMA(&huart3, uart_rx_buffer, UART_RX_BUFFER_SIZE);
-	__HAL_UART_ENABLE_IT(&huart3, UART_IT_IDLE);
+	HAL_UART_Receive_DMA(&MODBUS_PORT, uart_rx_buffer, UART_RX_BUFFER_SIZE);
+	__HAL_UART_ENABLE_IT(&MODBUS_PORT, UART_IT_IDLE);
 
 	modbus_slave_setup(current_modbus_slave_id);
 	printf("🔌 Modbus SLAVE mode initialized\r\n");
@@ -983,15 +985,15 @@ static void MX_USART1_UART_Init(void)
 	/* USER CODE BEGIN USART1_Init 1 */
 
 	/* USER CODE END USART1_Init 1 */
-	huart1.Instance = USART1;
-	huart1.Init.BaudRate = 115200;
-	huart1.Init.WordLength = UART_WORDLENGTH_8B;
-	huart1.Init.StopBits = UART_STOPBITS_1;
-	huart1.Init.Parity = UART_PARITY_NONE;
-	huart1.Init.Mode = UART_MODE_TX_RX;
-	huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-	huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-	if (HAL_UART_Init(&huart1) != HAL_OK)
+	COMMAND_PORT.Instance = USART1;
+	COMMAND_PORT.Init.BaudRate = 115200;
+	COMMAND_PORT.Init.WordLength = UART_WORDLENGTH_8B;
+	COMMAND_PORT.Init.StopBits = UART_STOPBITS_1;
+	COMMAND_PORT.Init.Parity = UART_PARITY_NONE;
+	COMMAND_PORT.Init.Mode = UART_MODE_TX_RX;
+	COMMAND_PORT.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+	COMMAND_PORT.Init.OverSampling = UART_OVERSAMPLING_16;
+	if (HAL_UART_Init(&COMMAND_PORT) != HAL_OK)
 	{
 		Error_Handler();
 	}
@@ -1015,15 +1017,15 @@ static void MX_USART3_UART_Init(void)
 	/* USER CODE BEGIN USART3_Init 1 */
 
 	/* USER CODE END USART3_Init 1 */
-	huart3.Instance = USART3;
-	huart3.Init.BaudRate = 115200;
-	huart3.Init.WordLength = UART_WORDLENGTH_8B;
-	huart3.Init.StopBits = UART_STOPBITS_1;
-	huart3.Init.Parity = UART_PARITY_NONE;
-	huart3.Init.Mode = UART_MODE_TX_RX;
-	huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-	huart3.Init.OverSampling = UART_OVERSAMPLING_16;
-	if (HAL_UART_Init(&huart3) != HAL_OK)
+	MODBUS_PORT.Instance = USART3;
+	MODBUS_PORT.Init.BaudRate = 115200;
+	MODBUS_PORT.Init.WordLength = UART_WORDLENGTH_8B;
+	MODBUS_PORT.Init.StopBits = UART_STOPBITS_1;
+	MODBUS_PORT.Init.Parity = UART_PARITY_NONE;
+	MODBUS_PORT.Init.Mode = UART_MODE_TX_RX;
+	MODBUS_PORT.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+	MODBUS_PORT.Init.OverSampling = UART_OVERSAMPLING_16;
+	if (HAL_UART_Init(&MODBUS_PORT) != HAL_OK)
 	{
 		Error_Handler();
 	}

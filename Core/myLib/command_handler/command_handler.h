@@ -7,7 +7,7 @@
 #include <stdint.h>
 
 // Forward declaration for UART3 DMA restart function
-void Restart_UART3_DMA(void);
+void Restart_MODBUS_DMA(void);
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,8 +39,8 @@ typedef struct {
     // float *length;  // Now handled by encoder library
     uint32_t *parity;
     MeasurementMode_t *measurement_mode;
-    UART_HandleTypeDef *huart1;
-    UART_HandleTypeDef *huart3;
+    UART_HandleTypeDef *command_port;
+    UART_HandleTypeDef *modbus_port; // Changed from huart3 to modbus_port for clarity
     void *encoder;
     void *htim;
     uint8_t slave_id;
