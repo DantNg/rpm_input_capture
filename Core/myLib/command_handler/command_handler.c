@@ -109,7 +109,7 @@ void CommandHandler_Process(CommandHandler_t *handler) {
                         command_found = true;
                     }
                     // Proximity status command
-                    else if (strcmp(handler->cmd_buffer, "proximity_setting") == 0) {
+                    else if (strcmp(handler->cmd_buffer, "counter_setting") == 0) {
                         Process_ProximityCommands(handler, handler->cmd_buffer);
                         command_found = true;
                     }

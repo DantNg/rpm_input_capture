@@ -156,8 +156,8 @@ static inline void Encoder_ProcessMeasurements(Encoder_t* enc, uint16_t* holding
         // Pack float speed into two 16-bit registers
         uint32_t speed_bits = 0;
         memcpy(&speed_bits, &display_speed, sizeof(display_speed));
-        holding_regs[5] = (uint16_t)(speed_bits >> 16);
-        holding_regs[6] = (uint16_t)(speed_bits & 0xFFFF);
+        // holding_regs[5] = (uint16_t)(speed_bits >> 16);
+        // holding_regs[6] = (uint16_t)(speed_bits & 0xFFFF);
         
         // Debug: Print speed values with unit for troubleshooting
         // static uint32_t last_debug_time = 0;
@@ -171,8 +171,8 @@ static inline void Encoder_ProcessMeasurements(Encoder_t* enc, uint16_t* holding
         // LENGTH mode: Pack float length into two 16-bit registers
         uint32_t len_bits = 0;
         memcpy(&len_bits, &enc->current_length, sizeof(enc->current_length));
-        holding_regs[7] = (uint16_t)(len_bits >> 16);  // length high
-        holding_regs[8] = (uint16_t)(len_bits & 0xFFFF);  // length low
+        // holding_regs[7] = (uint16_t)(len_bits >> 16);  // length high
+        // holding_regs[8] = (uint16_t)(len_bits & 0xFFFF);  // length low
     }
 }
 

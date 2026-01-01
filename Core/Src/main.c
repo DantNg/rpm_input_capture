@@ -484,14 +484,20 @@ void on_read_holding_registers(uint16_t addr, uint16_t quantity)
 		if (speed_unit == SPEED_UNIT_RPM) {
 			holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
 		} else {
-			// For m/min, multiply by 100 to preserve 2 decimal places as integer
-			holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN) * 100);
+			// For m/min, use scaling factor of 10 instead of 100 to avoid overflow
+			// This gives 1 decimal place precision (e.g., 228.4 instead of 2284.0)
+			uint32_t speed_scaled = (uint32_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN) * 10);
+			holding_regs[4] = (speed_scaled > 65535) ? 65535 : (uint16_t)speed_scaled;
 		}
 	}
 	else if (current_measurement_mode == MEASUREMENT_MODE_LENGTH)
 	{
-		holding_regs[3] = (uint16_t)(Encoder_GetCurrentLength(&enc2) * 1000); // Show Length in mm
-		holding_regs[4] = 0; // Speed = 0 in LENGTH mode
+		// Use both register 3 and 4 to store length as 32-bit value to avoid overflow
+		// Length in mm (multiply by 1000 to convert from meters)
+		uint32_t length_mm = (uint32_t)(Encoder_GetCurrentLength(&enc2) * 1000);
+		
+		holding_regs[3] = (uint16_t)(length_mm & 0xFFFF);        // Lower 16 bits
+		holding_regs[4] = (uint16_t)((length_mm >> 16) & 0xFFFF); // Upper 16 bits
 	}
 	else
 	{
@@ -500,7 +506,8 @@ void on_read_holding_registers(uint16_t addr, uint16_t quantity)
 		if (speed_unit == SPEED_UNIT_RPM) {
 			holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
 		} else {
-			holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN) * 100);
+			uint32_t speed_scaled = (uint32_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN) * 10);
+			holding_regs[4] = (speed_scaled > 65535) ? 65535 : (uint16_t)speed_scaled;
 		}
 	}
 }
