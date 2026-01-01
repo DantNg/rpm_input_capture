@@ -113,13 +113,13 @@ void ProximityCounter_Init(ProximityCounter_t *prox_counter,
 /**
  * @brief Start proximity counter measurement
  */
-void ProximityCounter_Start(ProximityCounter_t *prox_counter) {
+void Counter_Start(ProximityCounter_t *prox_counter) {
     if (!prox_counter || !prox_counter->htim) {
         return;
     }
     
     // Reset all measurement states
-    ProximityCounter_Reset(prox_counter);
+    Counter_Reset(prox_counter);
     
     // Start input capture interrupt
     HAL_TIM_IC_Start_IT(prox_counter->htim, TIM_CHANNEL_1);
@@ -129,7 +129,7 @@ void ProximityCounter_Start(ProximityCounter_t *prox_counter) {
 /**
  * @brief Stop proximity counter measurement
  */
-void ProximityCounter_Stop(ProximityCounter_t *prox_counter) {
+void Counter_Stop(ProximityCounter_t *prox_counter) {
     if (!prox_counter || !prox_counter->htim) {
         return;
     }
@@ -142,7 +142,7 @@ void ProximityCounter_Stop(ProximityCounter_t *prox_counter) {
 /**
  * @brief Process new capture data and calculate RPM
  */
-void ProximityCounter_ProcessCapture(ProximityCounter_t *prox_counter) {
+void Counter_ProcessCapture(ProximityCounter_t *prox_counter) {
     if (!prox_counter || !prox_counter->new_capture_ready) {
         return;
     }
@@ -168,7 +168,7 @@ void ProximityCounter_ProcessCapture(ProximityCounter_t *prox_counter) {
 /**
  * @brief Check for timeout and reset if no pulses detected
  */
-void ProximityCounter_CheckTimeout(ProximityCounter_t *prox_counter) {
+void Counter_CheckTimeout(ProximityCounter_t *prox_counter) {
     if (!prox_counter) {
         return;
     }
@@ -192,7 +192,7 @@ void ProximityCounter_CheckTimeout(ProximityCounter_t *prox_counter) {
 /**
  * @brief Get current RPM value
  */
-float ProximityCounter_GetRPM(const ProximityCounter_t *prox_counter) {
+float Counter_GetRPM(const ProximityCounter_t *prox_counter) {
     if (!prox_counter) {
         return 0.0f;
     }
@@ -202,7 +202,7 @@ float ProximityCounter_GetRPM(const ProximityCounter_t *prox_counter) {
 /**
  * @brief Get current frequency in Hz
  */
-float ProximityCounter_GetFrequency(const ProximityCounter_t *prox_counter) {
+float Counter_GetFrequency(const ProximityCounter_t *prox_counter) {
     if (!prox_counter) {
         return 0.0f;
     }
@@ -212,7 +212,7 @@ float ProximityCounter_GetFrequency(const ProximityCounter_t *prox_counter) {
 /**
  * @brief Set PPR (Pulses Per Revolution)
  */
-void ProximityCounter_SetPPR(ProximityCounter_t *prox_counter, uint32_t ppr) {
+void Counter_SetPPR(ProximityCounter_t *prox_counter, uint32_t ppr) {
     if (!prox_counter || ppr == 0) {
         return;
     }
@@ -222,7 +222,7 @@ void ProximityCounter_SetPPR(ProximityCounter_t *prox_counter, uint32_t ppr) {
 /**
  * @brief Set diameter
  */
-void ProximityCounter_SetDiameter(ProximityCounter_t *prox_counter, float diameter) {
+void Counter_SetDiameter(ProximityCounter_t *prox_counter, float diameter) {
     if (!prox_counter || diameter <= 0.0f) {
         return;
     }
@@ -232,7 +232,7 @@ void ProximityCounter_SetDiameter(ProximityCounter_t *prox_counter, float diamet
 /**
  * @brief Set timeout value
  */
-void ProximityCounter_SetTimeout(ProximityCounter_t *prox_counter, uint32_t timeout_ms) {
+void Counter_SetTimeout(ProximityCounter_t *prox_counter, uint32_t timeout_ms) {
     if (!prox_counter || timeout_ms == 0) {
         return;
     }
@@ -242,7 +242,7 @@ void ProximityCounter_SetTimeout(ProximityCounter_t *prox_counter, uint32_t time
 /**
  * @brief Reset all measurement states
  */
-void ProximityCounter_Reset(ProximityCounter_t *prox_counter) {
+void Counter_Reset(ProximityCounter_t *prox_counter) {
     if (!prox_counter) {
         return;
     }
@@ -272,7 +272,7 @@ void ProximityCounter_Reset(ProximityCounter_t *prox_counter) {
 /**
  * @brief Update proximity counter configuration
  */
-void ProximityCounter_UpdateConfig(ProximityCounter_t *prox_counter, uint32_t ppr, float diameter) {
+void Counter_UpdateConfig(ProximityCounter_t *prox_counter, uint32_t ppr, float diameter) {
     if (!prox_counter) {
         return;
     }
@@ -281,7 +281,7 @@ void ProximityCounter_UpdateConfig(ProximityCounter_t *prox_counter, uint32_t pp
     prox_counter->diameter = diameter > 0.0f ? diameter : 0.25f;
     
     // Reset measurement to apply new config
-    ProximityCounter_Reset(prox_counter);
+    Counter_Reset(prox_counter);
 }
 
 /**

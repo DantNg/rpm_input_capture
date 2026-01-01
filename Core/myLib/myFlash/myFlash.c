@@ -60,7 +60,7 @@ void myFlash_LoadEncoderParams(myEncoderParams *out)
         buffer[0] = 1000U; // Default diameter in mm
     }
     if (buffer[1] == 0U || buffer[1] > 10000U) {
-        buffer[1] = 1U; // Default PPR 1
+        buffer[1] = 600U; // Default PPR 600
     }
     if (buffer[2] > 60000U) {
         buffer[2] = 10000U; // Default 10s timeout in ms

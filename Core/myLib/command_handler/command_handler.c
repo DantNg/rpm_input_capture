@@ -659,7 +659,7 @@ static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd) 
             
             // Update proximity counter configuration (same as Modbus handler)
             extern ProximityCounter_t proximity_counter;
-            ProximityCounter_UpdateConfig(&proximity_counter, *handler->config.ppr, *handler->config.dia);
+            Counter_UpdateConfig(&proximity_counter, *handler->config.ppr, *handler->config.dia);
             
             if (handler->config.encoder_init) {
                 handler->config.encoder_init(handler->config.encoder, handler->config.htim, 
@@ -688,7 +688,7 @@ static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd) 
             
             // Update proximity counter configuration (same as Modbus handler)
             extern ProximityCounter_t proximity_counter;
-            ProximityCounter_UpdateConfig(&proximity_counter, *handler->config.ppr, *handler->config.dia);
+            Counter_UpdateConfig(&proximity_counter, *handler->config.ppr, *handler->config.dia);
             
             if (handler->config.encoder_init) {
                 handler->config.encoder_init(handler->config.encoder, handler->config.htim, 
@@ -742,7 +742,7 @@ static void Process_EncoderCommands(CommandHandler_t *handler, const char* cmd) 
             
             // Update proximity counter timeout
             extern ProximityCounter_t proximity_counter;
-            ProximityCounter_SetTimeout(&proximity_counter, new_timeout * 10);
+            Counter_SetTimeout(&proximity_counter, new_timeout * 10);
             
             if (handler->config.encoder_init) {
                 handler->config.encoder_init(handler->config.encoder, handler->config.htim, 
@@ -1075,6 +1075,10 @@ static void Show_Help(void) {
     printf("  len_reset    - Reset length to 0\r\n");
     printf("  len_set <f>  - Set length in meters (0-10000)\r\n");
     printf("  len_save     - Save current length to Flash\r\n");
+    printf("MODE:\r\n");
+    printf("  mode         - Show current measurement mode\r\n");
+    printf("  mode length  - Switch to length measurement mode\r\n");
+    printf("  mode rpm     - Switch to RPM measurement mode\r\n");
     printf("SPEED DISPLAY:\r\n");
     printf("  speed_unit       - Show current speed display unit\r\n");
     printf("  speed_unit rpm   - Set speed display to RPM\r\n");
@@ -1084,12 +1088,12 @@ static void Show_Help(void) {
     printf("  modbus id <n>    - Set Modbus SLAVE ID (0x01-0xF7)\r\n");
     printf("  modbus enable    - Enable Modbus communication\r\n");
     printf("  modbus disable   - Disable Modbus communication\r\n");
-    printf("HYSTERESIS CONFIG:\r\n");
-    printf("  hyst             - Show hysteresis table\r\n");
-    printf("  hyst set <i> <rpm> <h> - Set/modify hysteresis entry\r\n");
-    printf("  hyst clear       - Clear all entries\r\n");
-    printf("  hyst default     - Restore default table\r\n");
-    printf("  hyst save/load   - Save/Load to Flash\r\n");
+    // printf("HYSTERESIS CONFIG:\r\n");
+    // printf("  hyst             - Show hysteresis table\r\n");
+    // printf("  hyst set <i> <rpm> <h> - Set/modify hysteresis entry\r\n");
+    // printf("  hyst clear       - Clear all entries\r\n");
+    // printf("  hyst default     - Restore default table\r\n");
+    // printf("  hyst save/load   - Save/Load to Flash\r\n");
     printf("PROXIMITY STATUS:\r\n");
     printf("  proximity_setting - Show proximity counter configuration\r\n");
 }

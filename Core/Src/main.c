@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include "myEncoder/myEncoder.h"
 #include "myEncoder/proximity_counter.h"
 #include "queue/queue.h"
 #include "modbus/modbus.h"
@@ -34,11 +35,12 @@
 extern ModbusResponseCallback modbus_user_on_response;
 
 // Runtime measurement mode variable
-MeasurementMode_t current_measurement_mode = MEASUREMENT_MODE_LENGTH;
+MeasurementMode_t current_measurement_mode = MEASUREMENT_MODE_RPM;
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+Encoder_t enc2;
 CommandHandler_t cmdh;
 /* USER CODE END PTD */
 
@@ -51,7 +53,7 @@ CommandHandler_t cmdh;
 #define MODBUS_SLAVE
 #define MODBUS_PORT huart2
 #define COMMAND_PORT huart1
-uint32_t PPR = 1;
+uint32_t PPR = 600;
 float DIA = 0.25f;
 uint32_t TIME = 100;
 uint32_t TIMEOUT = 10000U; // Default value, will be updated at runtime
@@ -163,115 +165,115 @@ void SetProximitySpeedUnit(int unit)
 
 void SetProximityHysteresis(int index, int rpm_threshold, int hysteresis)
 {
-	if (index >= 0 && index < 10)
-	{
-		ProximityCounter_SetHysteresisEntry(&proximity_counter, index, rpm_threshold, hysteresis);
-		printf("✅ Hysteresis[%d] set: RPM=%d, Threshold=%d\r\n", index, rpm_threshold, hysteresis);
-	}
+	// if (index >= 0 && index < 10)
+	// {
+	// 	ProximityCounter_SetHysteresisEntry(&proximity_counter, index, rpm_threshold, hysteresis);
+	// 	printf("✅ Hysteresis[%d] set: RPM=%d, Threshold=%d\r\n", index, rpm_threshold, hysteresis);
+	// }
 }
 
 void ShowProximityHysteresis(void)
 {
-	printf("=== CURRENT HYSTERESIS TABLE ===\r\n");
-	printf("Index | RPM Threshold | Hysteresis\r\n");
-	printf("------|---------------|----------\r\n");
-	for (int i = 0; i < 10; i++)
-	{
-		ProximityHysteresisEntry_t entry;
-		if (ProximityCounter_GetHysteresisEntry(&proximity_counter, i, &entry))
-		{
-			printf("  %d   |     %5d     |   %3d\r\n", i, entry.rpm_threshold, entry.hysteresis);
-		}
-		else
-		{
-			printf("  %d   |       ---     |   ---\r\n", i);
-		}
-	}
+	// printf("=== CURRENT HYSTERESIS TABLE ===\r\n");
+	// printf("Index | RPM Threshold | Hysteresis\r\n");
+	// printf("------|---------------|----------\r\n");
+	// for (int i = 0; i < 10; i++)
+	// {
+	// 	ProximityHysteresisEntry_t entry;
+	// 	if (ProximityCounter_GetHysteresisEntry(&proximity_counter, i, &entry))
+	// 	{
+	// 		printf("  %d   |     %5d     |   %3d\r\n", i, entry.rpm_threshold, entry.hysteresis);
+	// 	}
+	// 	else
+	// 	{
+	// 		printf("  %d   |       ---     |   ---\r\n", i);
+	// 	}
+	// }
 	printf("💡 Use: hyst set <index> <rpm> <hysteresis>\r\n");
 }
 
 void ClearProximityHysteresis(void)
 {
 	// Clear by resetting the table size and reinitializing
-	proximity_counter.hysteresis_table_size = 0;
+	// proximity_counter.hysteresis_table_size = 0;
 	printf("✅ Hysteresis table cleared\r\n");
 }
 
 void SaveProximityHysteresis(void)
 {
 	printf("💾 Saving hysteresis table to Flash...\r\n");
-	printf("🔍 Current table has %d entries:\r\n", proximity_counter.hysteresis_table_size);
+//	printf("🔍 Current table has %d entries:\r\n", proximity_counter.hysteresis_table_size);
 
-	myHysteresisTable table = {0};
-	table.entry_count = proximity_counter.hysteresis_table_size;
+	// myHysteresisTable table = {0};
+	// table.entry_count = proximity_counter.hysteresis_table_size;
 
-	// Copy entries from proximity counter to Flash structure
-	for (int i = 0; i < table.entry_count && i < 10; i++)
-	{
-		table.entries[i].rpm_threshold = proximity_counter.hysteresis_table[i].rpm_threshold;
-		table.entries[i].hysteresis = proximity_counter.hysteresis_table[i].hysteresis;
-		printf("  Entry %d: RPM=%d, Hyst=%d\r\n", i,
-			   table.entries[i].rpm_threshold, table.entries[i].hysteresis);
-	}
+	// // Copy entries from proximity counter to Flash structure
+	// for (int i = 0; i < table.entry_count && i < 10; i++)
+	// {
+	// 	table.entries[i].rpm_threshold = proximity_counter.hysteresis_table[i].rpm_threshold;
+	// 	table.entries[i].hysteresis = proximity_counter.hysteresis_table[i].hysteresis;
+	// 	printf("  Entry %d: RPM=%d, Hyst=%d\r\n", i,
+	// 		   table.entries[i].rpm_threshold, table.entries[i].hysteresis);
+	// }
 
-	if (myFlash_SaveHysteresisTable(&table) == HAL_OK)
-	{
-		printf("✅ Hysteresis table saved successfully (%d entries)\r\n", table.entry_count);
+	// if (myFlash_SaveHysteresisTable(&table) == HAL_OK)
+	// {
+	// 	printf("✅ Hysteresis table saved successfully (%d entries)\r\n", table.entry_count);
 
-		// Verify save by reading back
-		myHysteresisTable verify_table = {0};
-		myFlash_LoadHysteresisTable(&verify_table);
-		printf("🔍 Verification: entry_count=%d\r\n", verify_table.entry_count);
-	}
-	else
-	{
-		printf("❌ Failed to save hysteresis table to Flash\r\n");
-	}
+	// 	// Verify save by reading back
+	// 	myHysteresisTable verify_table = {0};
+	// 	myFlash_LoadHysteresisTable(&verify_table);
+	// 	printf("🔍 Verification: entry_count=%d\r\n", verify_table.entry_count);
+	// }
+	// else
+	// {
+	// 	printf("❌ Failed to save hysteresis table to Flash\r\n");
+	// }
 }
 
 void LoadProximityHysteresis(void)
 {
 	printf("📖 Loading hysteresis table from Flash...\r\n");
 
-	myHysteresisTable table = {0};
-	myFlash_LoadHysteresisTable(&table);
+	// myHysteresisTable table = {0};
+	// myFlash_LoadHysteresisTable(&table);
 
-	// Debug: Show what was loaded from Flash
-	printf("🔍 Flash data: entry_count=%d (0x%02X)\r\n", table.entry_count, table.entry_count);
+	// // Debug: Show what was loaded from Flash
+	// printf("🔍 Flash data: entry_count=%d (0x%02X)\r\n", table.entry_count, table.entry_count);
 
-	// Check if data is valid (not uninitialized Flash)
-	// Uninitialized flash will have entry_count = 0xFF (255)
-	if (table.entry_count != 0xFF && table.entry_count <= 10 && table.entry_count > 0)
-	{
-		// Clear current table completely
-		proximity_counter.hysteresis_table_size = 0;
-		memset(proximity_counter.hysteresis_table, 0, sizeof(proximity_counter.hysteresis_table));
+	// // Check if data is valid (not uninitialized Flash)
+	// // Uninitialized flash will have entry_count = 0xFF (255)
+	// if (table.entry_count != 0xFF && table.entry_count <= 10 && table.entry_count > 0)
+	// {
+	// 	// Clear current table completely
+	// 	proximity_counter.hysteresis_table_size = 0;
+	// 	memset(proximity_counter.hysteresis_table, 0, sizeof(proximity_counter.hysteresis_table));
 
-		// Load ALL entries from Flash to proximity counter at correct positions
-		for (int i = 0; i < table.entry_count && i < 10; i++)
-		{
-			// Only skip entries with uninitialized Flash data (0xFFFF)
-			if (table.entries[i].rpm_threshold != 0xFFFF && table.entries[i].hysteresis != 0xFFFF &&
-				table.entries[i].hysteresis > 0)
-			{ // Allow RPM=0, only check hysteresis > 0
-				proximity_counter.hysteresis_table[i].rpm_threshold = table.entries[i].rpm_threshold;
-				proximity_counter.hysteresis_table[i].hysteresis = table.entries[i].hysteresis;
-				// Update table size to include this entry
-				if (i >= proximity_counter.hysteresis_table_size)
-				{
-					proximity_counter.hysteresis_table_size = i + 1;
-				}
-				printf("  Entry %d: RPM=%d, Hyst=%d\r\n", i,
-					   table.entries[i].rpm_threshold, table.entries[i].hysteresis);
-			}
-		}
-		printf("✅ Loaded %d valid hysteresis entries from Flash\r\n", proximity_counter.hysteresis_table_size);
-	}
-	else
-	{
-		printf("⚠️  Invalid Flash data (entry_count=%d) - using default hysteresis table\r\n", table.entry_count);
-		ProximityCounter_InitDefaultHysteresis(&proximity_counter);
-	}
+	// 	// Load ALL entries from Flash to proximity counter at correct positions
+	// 	for (int i = 0; i < table.entry_count && i < 10; i++)
+	// 	{
+	// 		// Only skip entries with uninitialized Flash data (0xFFFF)
+	// 		if (table.entries[i].rpm_threshold != 0xFFFF && table.entries[i].hysteresis != 0xFFFF &&
+	// 			table.entries[i].hysteresis > 0)
+	// 		{ // Allow RPM=0, only check hysteresis > 0
+	// 			proximity_counter.hysteresis_table[i].rpm_threshold = table.entries[i].rpm_threshold;
+	// 			proximity_counter.hysteresis_table[i].hysteresis = table.entries[i].hysteresis;
+	// 			// Update table size to include this entry
+	// 			if (i >= proximity_counter.hysteresis_table_size)
+	// 			{
+	// 				proximity_counter.hysteresis_table_size = i + 1;
+	// 			}
+	// 			printf("  Entry %d: RPM=%d, Hyst=%d\r\n", i,
+	// 				   table.entries[i].rpm_threshold, table.entries[i].hysteresis);
+	// 		}
+	// 	}
+	// 	printf("✅ Loaded %d valid hysteresis entries from Flash\r\n", proximity_counter.hysteresis_table_size);
+	// }
+	// else
+	// {
+	// 	printf("⚠️  Invalid Flash data (entry_count=%d) - using default hysteresis table\r\n", table.entry_count);
+	// 	ProximityCounter_InitDefaultHysteresis(&proximity_counter);
+	// }
 }
 
 // Public function for modbus_port DMA restart
@@ -281,7 +283,6 @@ void Restart_MODBUS_DMA(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-// Hysteresis filter function now in proximity_counter library
 
 void Restart_MODBUS_DMA(void)
 {
@@ -386,62 +387,60 @@ static void Apply_Modbus_UART_Params(const myModbusUARTParams *p)
 	Restart_MODBUS_DMA();
 }
 
-// static void HoldingRegs_Refresh(void)
-// {
-// 	memset(holding_regs, 0, sizeof(holding_regs));
-// 	holding_regs[0] = PPR;															// pulses per revolution
-// 	holding_regs[1] = (uint16_t)(DIA * 1000);										// diameter in mm
-// 	holding_regs[2] = TIME;															// sample time in ms
-// 	holding_regs[3] = (uint16_t)floor(ProximityCounter_GetRPM(&proximity_counter)); // current RPM
-// }
+static void Process_EncoderAndLength(void){
+	pulse_t = Encoder_GetPulse(&enc2);
 
-// static void Handle_Buttons(void)
-// {
-// 	static bool emergency_save_done = false;
+	// Process encoder measurements and update holding registers
+	Encoder_ProcessMeasurements(&enc2, holding_regs, current_measurement_mode);
+}
 
-// 	if (HAL_GPIO_ReadPin(POWER_STATUS_GPIO_PORT, POWER_STATUS_PIN) == GPIO_PIN_SET)
-// 	{
-// 		// Power loss detected - emergency save all critical parameters
-// 		if (!emergency_save_done)
-// 		{
-// 			// 1. Save current length (highest priority - measurement data)
-// 			uint32_t current_length_mm = 0;
-// 			myFlash_SaveLength(current_length_mm);
+static void Handle_Buttons(void)
+{
+	static bool emergency_save_done = false;
 
-// 			// 2. Save encoder params
-// 			myEncoderParams enc_params = {
-// 				.diameter = (uint32_t)(DIA * 1000), // Convert to mm
-// 				.pulsesPerRev = PPR,
-// 				.sampleTimeMs = TIME,
-// 			};
-// 			myFlash_SaveEncoderParams(&enc_params);
+	if (HAL_GPIO_ReadPin(POWER_STATUS_GPIO_PORT, POWER_STATUS_PIN) == GPIO_PIN_SET)
+	{
+		// Power loss detected - emergency save all critical parameters
+		if (!emergency_save_done)
+		{
+			// 1. Save current length (highest priority - measurement data)
+			uint32_t current_length_mm = 0;
+			myFlash_SaveLength(current_length_mm);
 
-// 			// 3. Save UART params
-// 			myUARTParams p;
-// 			p.baudRate = MODBUS_PORT.Init.BaudRate;
-// 			p.parity = parity;
-// 			p.stopBits = (MODBUS_PORT.Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
-// 			p.frameTimeoutMs = TIME;
-// 			myFlash_SaveUARTParams(&p);
+			// 2. Save encoder params
+			myEncoderParams enc_params = {
+				.diameter = (uint32_t)(DIA * 1000), // Convert to mm
+				.pulsesPerRev = PPR,
+				.sampleTimeMs = TIME,
+			};
+			myFlash_SaveEncoderParams(&enc_params);
 
-// 			emergency_save_done = true;
-// 		}
+			// 3. Save UART params
+			myUARTParams p;
+			p.baudRate = MODBUS_PORT.Init.BaudRate;
+			p.parity = parity;
+			p.stopBits = (MODBUS_PORT.Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
+			p.frameTimeoutMs = TIME;
+			myFlash_SaveUARTParams(&p);
 
-// 		// Minimal delay to debounce, then wait for power restoration or complete loss
-// 		uint32_t start_time = HAL_GetTick();
-// 		while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) == GPIO_PIN_SET && (HAL_GetTick() - start_time) < 100)
-// 		{
-// 			// Keep watchdog alive during power loss event
-// 			HAL_IWDG_Refresh(&hiwdg);
-// 		}
+			emergency_save_done = true;
+		}
 
-// 		// Reset flag when power is restored
-// 		if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) == GPIO_PIN_RESET)
-// 		{
-// 			emergency_save_done = false;
-// 		}
-// 	}
-// }
+		// Minimal delay to debounce, then wait for power restoration or complete loss
+		uint32_t start_time = HAL_GetTick();
+		while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) == GPIO_PIN_SET && (HAL_GetTick() - start_time) < 100)
+		{
+			// Keep watchdog alive during power loss event
+			HAL_IWDG_Refresh(&hiwdg);
+		}
+
+		// Reset flag when power is restored
+		if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) == GPIO_PIN_RESET)
+		{
+			emergency_save_done = false;
+		}
+	}
+}
 
 void HAL_UART_IDLE_Callback(UART_HandleTypeDef *huart)
 {
@@ -472,7 +471,24 @@ void on_read_holding_registers(uint16_t addr, uint16_t quantity)
 	holding_regs[0] = PPR;
 	holding_regs[1] = (uint16_t)(DIA * 1000);
 	holding_regs[2] = TIME;
-	holding_regs[3] = (uint16_t)floor(ProximityCounter_GetRPM(&proximity_counter));
+	
+	// Only show value based on current measurement mode
+	if (current_measurement_mode == MEASUREMENT_MODE_RPM)
+	{
+		holding_regs[3] = 0; // Length = 0 in RPM mode
+		holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM)); // Show RPM
+	}
+	else if (current_measurement_mode == MEASUREMENT_MODE_LENGTH)
+	{
+		holding_regs[3] = (uint16_t)(Encoder_GetCurrentLength(&enc2) * 1000); // Show Length in mm
+		holding_regs[4] = 0; // RPM = 0 in LENGTH mode
+	}
+	else
+	{
+		// Default: show both values
+		holding_regs[3] = (uint16_t)(Encoder_GetCurrentLength(&enc2) * 1000);
+		holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
+	}
 }
 void on_write_single_register(uint16_t addr, uint16_t value)
 {
@@ -481,26 +497,84 @@ void on_write_single_register(uint16_t addr, uint16_t value)
 	case 0:
 		holding_regs[0] = value;
 		PPR = value;
-		ProximityCounter_UpdateConfig(&proximity_counter, PPR, DIA);
+		Counter_UpdateConfig(&proximity_counter, PPR, DIA);
 		break; // số xung
 	case 1:
 		holding_regs[1] = value;
 		DIA = (float)value / 1000.0;
-		ProximityCounter_UpdateConfig(&proximity_counter, PPR, DIA);
+		Counter_UpdateConfig(&proximity_counter, PPR, DIA);
 		break; // đường kính (mm)
 	case 2:
 		holding_regs[2] = value;
 		TIME = value;
-		ProximityCounter_SetTimeout(&proximity_counter, value * 10); // Convert to reasonable timeout
+		Counter_SetTimeout(&proximity_counter, value * 10); // Convert to reasonable timeout
 		break;														 // thời gian lấy mẫu (ms)
 	default:
 		break;
 	}
+	
+	// Auto save to Flash after any parameter update
+	if (addr >= 0 && addr <= 2)
+	{
+		myEncoderParams enc_params = {
+			.diameter = (uint32_t)(DIA * 1000), // Convert to mm
+			.pulsesPerRev = PPR,
+			.timeout = TIMEOUT,
+			.sampleTimeMs = TIME,
+		};
+		myFlash_SaveEncoderParams(&enc_params);
+	}
 }
-void on_write_multiple_registers(uint16_t addr, const uint16_t *values,
-								 uint16_t quantity)
+void on_write_multiple_registers(uint16_t addr, const uint16_t *values, uint16_t quantity)
 {
-	printf("Master write multi registers!\n");
+	bool params_updated = false;
+	
+	for (uint16_t i = 0; i < quantity; i++)
+	{
+		uint16_t current_addr = addr + i;
+		uint16_t value = values[i];
+		
+		switch (current_addr)
+		{
+		case 0:
+			holding_regs[0] = value;
+			PPR = value;
+			Counter_UpdateConfig(&proximity_counter, PPR, DIA);
+			params_updated = true;
+			break; // số xung
+		case 1:
+			holding_regs[1] = value;
+			DIA = (float)value / 1000.0;
+			Counter_UpdateConfig(&proximity_counter, PPR, DIA);
+			params_updated = true;
+			break; // đường kính (mm)
+		case 2:
+			holding_regs[2] = value;
+			TIME = value;
+			Counter_SetTimeout(&proximity_counter, value * 10); // Convert to reasonable timeout
+			params_updated = true;
+			break; // thời gian lấy mẫu (ms)
+		default:
+			// Update holding register even if we don't have specific handling
+			if (current_addr < 10)
+			{
+				holding_regs[current_addr] = value;
+			}
+			break;
+		}
+	}
+	
+	// Auto save to Flash if any encoder parameters were updated
+	if (params_updated)
+	{
+		myEncoderParams enc_params = {
+			.diameter = (uint32_t)(DIA * 1000), // Convert to mm
+			.pulsesPerRev = PPR,
+			.timeout = TIMEOUT,
+			.sampleTimeMs = TIME,
+		};
+		myFlash_SaveEncoderParams(&enc_params);
+	}
 }
 void modbus_slave_setup(uint8_t slave_id)
 {
@@ -537,18 +611,6 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 		// Ngay khi gửi xong, chuyển về chế độ nhận (DE=LOW) bằng macro
 		MODBUS_SET_DE_RX();
 	}
-}
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
-{
-	// Delegate to proximity counter library
-	ProximityCounter_HandleCapture(&proximity_counter, htim);
-}
-
-// Timer overflow callback - counts overflows between captures
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-	// Delegate to proximity counter library
-	ProximityCounter_HandleOverflow(&proximity_counter, htim);
 }
 /* USER CODE END 0 */
 
@@ -590,15 +652,6 @@ int main(void)
   MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
 	// Load Debug Config from Flash
-
-	// Initialize proximity counter
-	ProximityCounterConfig_t prox_config = {
-		.ppr = PPR,
-		.diameter = DIA,
-		.timeout_ms = TIMEOUT,
-		.averaging_samples = 3};
-	ProximityCounter_Init(&proximity_counter, &prox_config, &htim2);
-	ProximityCounter_Start(&proximity_counter);
 	CommandHandler_InitDebugConfigFromFlash();
 	CommandHandler_GetDebugConfig(&debug_messages_enabled, &debug_message_interval_ms);
 	printf("Loaded Debug config from Flash: Status=%s Interval=%lu ms\r\n",
@@ -615,13 +668,6 @@ int main(void)
 
 	// Load Speed Unit configuration from Flash
 	CommandHandler_InitSpeedUnitFromFlash();
-	SpeedDisplayUnit_t loaded_speed_unit = CommandHandler_GetSpeedDisplayUnit();
-	SetProximitySpeedUnit((loaded_speed_unit == SPEED_UNIT_RPM) ? 0 : 1);
-	printf("Loaded speed display unit: %s\r\n",
-		   (loaded_speed_unit == SPEED_UNIT_RPM) ? "RPM" : "m/min");
-
-	// Load Hysteresis table from Flash
-	LoadProximityHysteresis();
 
 	// Initialize Command Handler
 	CommandHandler_Config_t cmd_config = {
@@ -709,10 +755,6 @@ int main(void)
 		}
 	}
 
-	// Apply loaded encoder params to proximity counter
-	ProximityCounter_UpdateConfig(&proximity_counter, PPR, DIA);
-	ProximityCounter_SetTimeout(&proximity_counter, TIMEOUT);
-
 	// Initialize length value if not in flash
 	uint32_t saved_length = myFlash_LoadLength();
 	if (saved_length == 0xFFFFFFFFU)
@@ -731,13 +773,13 @@ int main(void)
 
 	// Load measurement mode from Flash
 	uint32_t saved_mode = myFlash_LoadMeasurementMode();
-	if (saved_mode == 0xFFFFFFFFU || saved_mode > MEASUREMENT_MODE_LENGTH)
+	if (saved_mode == 0xFFFFFFFFU || saved_mode > MEASUREMENT_MODE_RPM)
 	{
-		// Initialize to LENGTH mode if not set or invalid
-		current_measurement_mode = MEASUREMENT_MODE_LENGTH;
-		if (myFlash_SaveMeasurementMode(MEASUREMENT_MODE_LENGTH) == HAL_OK)
+		// Initialize to RPM mode if not set or invalid
+		current_measurement_mode = MEASUREMENT_MODE_RPM;
+		if (myFlash_SaveMeasurementMode(MEASUREMENT_MODE_RPM) == HAL_OK)
 		{
-			printf("⚙️ Initialized measurement mode to LENGTH and saved to Flash\r\n");
+			printf("⚙️ Initialized measurement mode to RPM and saved to Flash\r\n");
 		}
 	}
 	else
@@ -755,7 +797,16 @@ int main(void)
 	printf("🔌 Modbus SLAVE mode initialized\r\n");
 	// ----------------- IWDG -------------------------------
 	// Already initialized in MX_IWDG_Init(); keep refreshing in loop
+	// ----------------- Encoder -----------------------------
+	htim2.Instance = TIM2;
 
+	if (Encoder_InitFull(&enc2, &htim2, PPR, DIA, TIME) != HAL_OK)
+	{
+		printf("❌ Encoder initialization failed!\r\n");
+		Error_Handler();
+	}
+	Encoder_RegisterInstance(&enc2); // Register for interrupt handling
+	printf("✅ Encoder initialized successfully\r\n");
 	CommandHandler_Init(&cmdh, &cmd_config);
 	printf("System initialized.\r\n");
   /* USER CODE END 2 */
@@ -767,29 +818,34 @@ int main(void)
 		HAL_IWDG_Refresh(&hiwdg);
 		CommandHandler_Process(&cmdh);
 		// Process proximity counter
-		ProximityCounter_ProcessCapture(&proximity_counter);
-		ProximityCounter_CheckTimeout(&proximity_counter);
-
+		Process_EncoderAndLength();
+		Handle_Buttons();
 		// Display speed according to current unit setting
-		ProximitySpeedUnit_t current_unit = ProximityCounter_GetSpeedUnit(&proximity_counter);
-		current_speed = ProximityCounter_GetSpeed(&proximity_counter, current_unit);
 
 		static uint32_t last_print_tick = 0;
 		uint32_t now = HAL_GetTick();
 		if (debug_messages_enabled && (now - last_print_tick >= debug_message_interval_ms))
 		{
 			last_print_tick = now;
-			if (current_unit == PROXIMITY_SPEED_UNIT_RPM)
+			
+			// Display based on current measurement mode
+			if (current_measurement_mode == MEASUREMENT_MODE_RPM)
 			{
-				printf("RPM: %.2f\r\n", current_speed);
+				current_speed = floor(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
+				printf("RPM: %.0f\r\n", current_speed);
+			}
+			else if (current_measurement_mode == MEASUREMENT_MODE_LENGTH)
+			{
+				float current_length = Encoder_GetCurrentLength(&enc2);
+				printf("Length: %.3f m\r\n", current_length);
 			}
 			else
 			{
+				// Display speed in m/min
+				current_speed = Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN);
 				printf("Speed: %.2f m/min\r\n", current_speed);
 			}
 		}
-		// HoldingRegs_Refresh();
-		// Handle_Buttons();
 
 		queue_frame_t frame;
 		if (queue_pop(&frame))
@@ -1123,11 +1179,11 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : PA4 */
-  GPIO_InitStruct.Pin = GPIO_PIN_4;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+	/*Configure GPIO pins : PA3 PA4 */
+	GPIO_InitStruct.Pin = GPIO_PIN_3 | GPIO_PIN_4;
+	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+	GPIO_InitStruct.Pull = GPIO_PULLUP;
+	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PB12 */
   GPIO_InitStruct.Pin = GPIO_PIN_12;

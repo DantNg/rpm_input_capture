@@ -101,14 +101,14 @@ void ProximityCounter_Init(ProximityCounter_t *prox_counter,
  * @param prox_counter: Pointer to ProximityCounter_t structure
  * @retval None
  */
-void ProximityCounter_Start(ProximityCounter_t *prox_counter);
+void Counter_Start(ProximityCounter_t *prox_counter);
 
 /**
  * @brief Stop proximity counter measurement
  * @param prox_counter: Pointer to ProximityCounter_t structure
  * @retval None
  */
-void ProximityCounter_Stop(ProximityCounter_t *prox_counter);
+void Counter_Stop(ProximityCounter_t *prox_counter);
 
 /**
  * @brief Process new capture data and calculate RPM
@@ -116,7 +116,7 @@ void ProximityCounter_Stop(ProximityCounter_t *prox_counter);
  * @retval None
  * @note Call this function in main loop when new_capture_ready flag is set
  */
-void ProximityCounter_ProcessCapture(ProximityCounter_t *prox_counter);
+void Counter_ProcessCapture(ProximityCounter_t *prox_counter);
 
 /**
  * @brief Check for timeout and reset if no pulses detected
@@ -124,21 +124,21 @@ void ProximityCounter_ProcessCapture(ProximityCounter_t *prox_counter);
  * @retval None
  * @note Call this function periodically in main loop
  */
-void ProximityCounter_CheckTimeout(ProximityCounter_t *prox_counter);
+void Counter_CheckTimeout(ProximityCounter_t *prox_counter);
 
 /**
  * @brief Get current RPM value
  * @param prox_counter: Pointer to ProximityCounter_t structure
  * @retval Current RPM as float
  */
-float ProximityCounter_GetRPM(const ProximityCounter_t *prox_counter);
+float Counter_GetRPM(const ProximityCounter_t *prox_counter);
 
 /**
  * @brief Get current frequency in Hz
  * @param prox_counter: Pointer to ProximityCounter_t structure
  * @retval Current frequency as float
  */
-float ProximityCounter_GetFrequency(const ProximityCounter_t *prox_counter);
+float Counter_GetFrequency(const ProximityCounter_t *prox_counter);
 
 /**
  * @brief Set PPR (Pulses Per Revolution)
@@ -146,7 +146,7 @@ float ProximityCounter_GetFrequency(const ProximityCounter_t *prox_counter);
  * @param ppr: New PPR value
  * @retval None
  */
-void ProximityCounter_SetPPR(ProximityCounter_t *prox_counter, uint32_t ppr);
+void Counter_SetPPR(ProximityCounter_t *prox_counter, uint32_t ppr);
 
 /**
  * @brief Set diameter
@@ -154,7 +154,7 @@ void ProximityCounter_SetPPR(ProximityCounter_t *prox_counter, uint32_t ppr);
  * @param diameter: New diameter in meters
  * @retval None
  */
-void ProximityCounter_SetDiameter(ProximityCounter_t *prox_counter, float diameter);
+void Counter_SetDiameter(ProximityCounter_t *prox_counter, float diameter);
 
 /**
  * @brief Set timeout value
@@ -162,7 +162,7 @@ void ProximityCounter_SetDiameter(ProximityCounter_t *prox_counter, float diamet
  * @param timeout_ms: New timeout in milliseconds
  * @retval None
  */
-void ProximityCounter_SetTimeout(ProximityCounter_t *prox_counter, uint32_t timeout_ms);
+void Counter_SetTimeout(ProximityCounter_t *prox_counter, uint32_t timeout_ms);
 
 /**
  * @brief Get current speed in specified unit
@@ -223,7 +223,7 @@ void ProximityCounter_InitDefaultHysteresis(ProximityCounter_t *prox_counter);
  * @param prox_counter: Pointer to ProximityCounter_t structure
  * @retval None
  */
-void ProximityCounter_Reset(ProximityCounter_t *prox_counter);
+void Counter_Reset(ProximityCounter_t *prox_counter);
 
 /**
  * @brief Update proximity counter configuration
@@ -232,7 +232,7 @@ void ProximityCounter_Reset(ProximityCounter_t *prox_counter);
  * @param diameter: New diameter in meters
  * @retval None
  */
-void ProximityCounter_UpdateConfig(ProximityCounter_t *prox_counter, uint32_t ppr, float diameter);
+void Counter_UpdateConfig(ProximityCounter_t *prox_counter, uint32_t ppr, float diameter);
 
 /**
  * @brief Handle input capture callback - call this from HAL_TIM_IC_CaptureCallback
