@@ -1094,8 +1094,8 @@ static void Show_Help(void) {
     // printf("  hyst clear       - Clear all entries\r\n");
     // printf("  hyst default     - Restore default table\r\n");
     // printf("  hyst save/load   - Save/Load to Flash\r\n");
-    printf("PROXIMITY STATUS:\r\n");
-    printf("  proximity_setting - Show proximity counter configuration\r\n");
+    printf("COUNTER STATUS:\r\n");
+    printf("  counter_setting - Show counter configuration\r\n");
 }
 
 /**
@@ -1105,7 +1105,7 @@ static void Process_ProximityCommands(CommandHandler_t *handler, const char* cmd
     if (strcmp(cmd, "hyst") == 0 || strcmp(cmd, "hyst show") == 0) {
         ShowProximityHysteresis();
         
-    } else if (strcmp(cmd, "proximity_setting") == 0) {
+    } else if (strcmp(cmd, "counter_setting") == 0) {
         printf("PPR=%lu DIA=%.3f SAMPLE TIME=%lums TIMEOUT=%lums\r\n", 
                (unsigned long)*handler->config.ppr, 
                (double)*handler->config.dia, 

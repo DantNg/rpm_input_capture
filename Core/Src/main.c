@@ -472,22 +472,36 @@ void on_read_holding_registers(uint16_t addr, uint16_t quantity)
 	holding_regs[1] = (uint16_t)(DIA * 1000);
 	holding_regs[2] = TIME;
 	
+	// Get current speed display unit setting
+	extern SpeedDisplayUnit_t CommandHandler_GetSpeedDisplayUnit(void);
+	SpeedDisplayUnit_t speed_unit = CommandHandler_GetSpeedDisplayUnit();
+	
 	// Only show value based on current measurement mode
 	if (current_measurement_mode == MEASUREMENT_MODE_RPM)
 	{
 		holding_regs[3] = 0; // Length = 0 in RPM mode
-		holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM)); // Show RPM
+		// Show speed according to current display unit setting
+		if (speed_unit == SPEED_UNIT_RPM) {
+			holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
+		} else {
+			// For m/min, multiply by 100 to preserve 2 decimal places as integer
+			holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN) * 100);
+		}
 	}
 	else if (current_measurement_mode == MEASUREMENT_MODE_LENGTH)
 	{
 		holding_regs[3] = (uint16_t)(Encoder_GetCurrentLength(&enc2) * 1000); // Show Length in mm
-		holding_regs[4] = 0; // RPM = 0 in LENGTH mode
+		holding_regs[4] = 0; // Speed = 0 in LENGTH mode
 	}
 	else
 	{
-		// Default: show both values
+		// Default: show both values, speed according to display unit
 		holding_regs[3] = (uint16_t)(Encoder_GetCurrentLength(&enc2) * 1000);
-		holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
+		if (speed_unit == SPEED_UNIT_RPM) {
+			holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
+		} else {
+			holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN) * 100);
+		}
 	}
 }
 void on_write_single_register(uint16_t addr, uint16_t value)
@@ -831,17 +845,28 @@ int main(void)
 			// Display based on current measurement mode
 			if (current_measurement_mode == MEASUREMENT_MODE_RPM)
 			{
-				current_speed = floor(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
-				printf("RPM: %.0f\r\n", current_speed);
+				// Get current speed display unit setting
+				extern SpeedDisplayUnit_t CommandHandler_GetSpeedDisplayUnit(void);
+				SpeedDisplayUnit_t speed_unit = CommandHandler_GetSpeedDisplayUnit();
+				
+				current_speed = Encoder_GetCurrentSpeed(&enc2, speed_unit);
+				
+				if (speed_unit == SPEED_UNIT_RPM) {
+					printf("RPM: %.0f\r\n", floor(current_speed));
+				} else {
+					printf("Speed: %.2f m/min\r\n", current_speed);
+				}
 			}
 			else if (current_measurement_mode == MEASUREMENT_MODE_LENGTH)
 			{
 				float current_length = Encoder_GetCurrentLength(&enc2);
 				printf("Length: %.3f m\r\n", current_length);
 			}
-			else
+			// Add support for speed m/min mode - can be triggered manually for testing
+			// You can change current_measurement_mode to other values via command interface
+			if (current_measurement_mode != MEASUREMENT_MODE_RPM && current_measurement_mode != MEASUREMENT_MODE_LENGTH)
 			{
-				// Display speed in m/min
+				// Display speed in m/min for any other mode
 				current_speed = Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN);
 				printf("Speed: %.2f m/min\r\n", current_speed);
 			}
