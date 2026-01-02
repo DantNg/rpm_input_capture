@@ -51,13 +51,7 @@ static void send_tcp_response(uint16_t tid, uint8_t uid, const uint8_t *pdu, uin
 	memcpy(&buf[idx], pdu, pdu_len);
 	idx = (uint16_t)(idx + pdu_len);
 	
-	// FIX: Debug TCP response frame
-	printf("📤 TCP Resp[%d]: ", idx);
-	for (int i = 0; i < idx && i < 32; i++) { // Limit to first 32 bytes
-		printf("%02X ", buf[i]);
-	}
-	if (idx > 32) printf("...");
-	printf("\r\n");
+	
 	
 	MODBUS_SET_DE_TX();
 	HAL_UART_Transmit_DMA(modbus_uart, buf, idx);
@@ -116,13 +110,6 @@ void modbus_slave_handle_frame(const uint8_t *frame, uint16_t len) {
 					slave_cfg.on_read_holding_registers(addr, count);
 				}
 				
-				// FIX: Debug registers before building response
-				printf("📋 Read Regs[%d:%d]: ", addr, count);
-				for (uint16_t i = 0; i < count && i < 8; i++) { // Limit debug output
-					printf("R%d=%04X ", addr + i, slave_cfg.holding_registers[addr + i]);
-				}
-				if (count > 8) printf("...");
-				printf("\r\n");
 				
 				resp_pdu[0] = fn;
 				resp_pdu[1] = (uint8_t)(count * 2);
