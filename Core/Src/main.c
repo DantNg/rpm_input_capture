@@ -392,7 +392,7 @@ static void HoldingRegs_Refresh(void)
 	holding_regs[0] = PPR;															// pulses per revolution
 	holding_regs[1] = (uint16_t)(DIA * 1000);										// diameter in mm
 	holding_regs[2] = TIME;															// sample time in ms
-	holding_regs[3] = 1234; // current RPM
+	holding_regs[3] = (uint16_t)floor(ProximityCounter_GetRPM(&proximity_counter)); // current RPM
 }
 
 // static void Handle_Buttons(void)
@@ -466,14 +466,14 @@ void HAL_UART_IDLE_Callback(UART_HandleTypeDef *huart)
 		HAL_UART_Receive_DMA(huart, uart_rx_buffer, UART_RX_BUFFER_SIZE);
 	}
 }
-// Modbus Functions handler
-void on_read_holding_registers(uint16_t addr, uint16_t quantity)
-{
-	holding_regs[0] = PPR;
-	holding_regs[1] = (uint16_t)(DIA * 1000);
-	holding_regs[2] = TIME;
-	holding_regs[3] = 1234;
-}
+// // Modbus Functions handler
+// void on_read_holding_registers(uint16_t addr, uint16_t quantity)
+// {
+// 	holding_regs[0] = PPR;
+// 	holding_regs[1] = (uint16_t)(DIA * 1000);
+// 	holding_regs[2] = TIME;
+// 	holding_regs[3] = 1234;
+// }
 void on_write_single_register(uint16_t addr, uint16_t value)
 {
 	switch (addr)
@@ -516,7 +516,7 @@ void modbus_slave_setup(uint8_t slave_id)
 		.input_register_count = 0,
 		.on_read_coils = NULL,
 		.on_read_discrete_inputs = NULL,
-		.on_read_holding_registers = on_read_holding_registers,
+		.on_read_holding_registers = NULL,
 		.on_read_input_registers = NULL,
 		.on_write_single_coil = NULL,
 		.on_write_single_register = on_write_single_register,
@@ -792,7 +792,7 @@ int main(void)
 				printf("Speed: %.2f m/min\r\n", current_speed);
 			}
 		}
-		// HoldingRegs_Refresh();
+		HoldingRegs_Refresh();
 		// Handle_Buttons();
 
 		queue_frame_t frame;
