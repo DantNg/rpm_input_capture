@@ -116,11 +116,6 @@ void modbus_slave_handle_frame(const uint8_t *frame, uint16_t len) {
 					slave_cfg.on_read_holding_registers(addr, count);
 				}
 				
-				// FIX: Debug registers before building response
-				printf("📋 Read Regs[%d:%d]: ", addr, count);
-				for (uint16_t i = 0; i < count && i < 8; i++) { // Limit debug output
-					printf("R%d=%04X ", addr + i, slave_cfg.holding_registers[addr + i]);
-				}
 				if (count > 8) printf("...");
 				printf("\r\n");
 				
