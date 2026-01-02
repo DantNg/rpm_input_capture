@@ -37,15 +37,15 @@ void send_response(uint8_t *data, uint16_t len) {
 static void send_tcp_response(uint16_t tid, uint8_t uid, const uint8_t *pdu, uint16_t pdu_len) {
 	uint8_t buf[256];
 	uint16_t idx = 0;
-	// MBAP
-	buf[idx++] = (uint8_t)(tid >> 8);
-	buf[idx++] = (uint8_t)(tid & 0xFF);
-	buf[idx++] = 0x00; // PID
-	buf[idx++] = 0x00;
-	uint16_t length_field = (uint16_t)(1 + pdu_len);
-	buf[idx++] = (uint8_t)(length_field >> 8);
-	buf[idx++] = (uint8_t)(length_field & 0xFF);
-	buf[idx++] = uid;
+	// MBAP Header
+	buf[idx++] = (uint8_t)(tid >> 8);      // Transaction ID high
+	buf[idx++] = (uint8_t)(tid & 0xFF);    // Transaction ID low
+	buf[idx++] = 0x00; // Protocol ID high
+	buf[idx++] = 0x00; // Protocol ID low
+	uint16_t length_field = (uint16_t)(1 + pdu_len); // Unit ID + PDU
+	buf[idx++] = (uint8_t)(length_field >> 8);    // Length high
+	buf[idx++] = (uint8_t)(length_field & 0xFF);   // Length low
+	buf[idx++] = uid;                              // Unit ID
 	// PDU
 	memcpy(&buf[idx], pdu, pdu_len);
 	idx = (uint16_t)(idx + pdu_len);
@@ -62,17 +62,27 @@ static uint16_t build_exception_pdu(uint8_t *out, uint8_t fn, uint8_t ex) {
 void modbus_slave_handle_frame(const uint8_t *frame, uint16_t len) {
 	if (!frame || len == 0) return;
 	if (slave_mode == MODBUS_SLAVE_MODE_TCP) {
-		if (len < 8) return; // MBAP + FC
+		if (len < 8) {
+			return; // MBAP (7 bytes) + FC (1 byte)
+		}
 		uint16_t tid = (uint16_t)(frame[0] << 8 | frame[1]);
 		uint16_t pid = (uint16_t)(frame[2] << 8 | frame[3]);
-		if (pid != 0x0000) return;
+		if (pid != 0x0000) {
+			return;
+		}
 		uint16_t l = (uint16_t)(frame[4] << 8 | frame[5]);
-		if (len < (uint16_t)(6 + l)) return;
+		if (len != (uint16_t)(6 + l)) {
+			return;
+		}
 		uint8_t uid = frame[6];
-		if (uid != slave_cfg.id) return;
+		if (uid != slave_cfg.id) {
+			return;
+		}
 		const uint8_t *pdu = &frame[7];
 		uint16_t pdu_len = (uint16_t)(l - 1);
-		if (pdu_len < 1) return;
+		if (pdu_len < 1) {
+			return;
+		}
 
 		uint8_t fn = pdu[0];
 		uint8_t resp_pdu[256];
@@ -86,11 +96,13 @@ void modbus_slave_handle_frame(const uint8_t *frame, uint16_t len) {
 				}
 				uint16_t addr = (uint16_t)(pdu[1] << 8 | pdu[2]);
 				uint16_t count = (uint16_t)(pdu[3] << 8 | pdu[4]);
-				if (count == 0 || (uint32_t)addr + count > slave_cfg.holding_register_count) {
+				if (count == 0 || count > 125 || (uint32_t)addr + count > slave_cfg.holding_register_count) {
 					resp_pdu_len = build_exception_pdu(resp_pdu, fn, 0x02);
 					break;
 				}
-				if (slave_cfg.on_read_holding_registers) slave_cfg.on_read_holding_registers(addr, count);
+				if (slave_cfg.on_read_holding_registers) {
+					slave_cfg.on_read_holding_registers(addr, count);
+				}
 				resp_pdu[0] = fn;
 				resp_pdu[1] = (uint8_t)(count * 2);
 				for (uint16_t i = 0; i < count; i++) {
@@ -166,6 +178,8 @@ void modbus_slave_handle_frame(const uint8_t *frame, uint16_t len) {
 		}
 		if (resp_pdu_len > 0) {
 			send_tcp_response(tid, uid, resp_pdu, resp_pdu_len);
+		} else {
+			printf("No response to send\n");
 		}
 		return;
 	}
@@ -187,7 +201,6 @@ void modbus_slave_handle_frame(const uint8_t *frame, uint16_t len) {
 	uint16_t quantity = 0;
 	uint8_t byte_count = 0;
 	uint8_t response[256];
-	// printf("Request to %d with Function Code 0x%02X\n",frame[0],func);
 	switch (func) {
 	case MODBUS_FUNC_READ_COILS: // Read Coils
 	{
