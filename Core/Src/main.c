@@ -386,14 +386,14 @@ static void Apply_Modbus_UART_Params(const myModbusUARTParams *p)
 	Restart_MODBUS_DMA();
 }
 
-// static void HoldingRegs_Refresh(void)
-// {
-// 	memset(holding_regs, 0, sizeof(holding_regs));
-// 	holding_regs[0] = PPR;															// pulses per revolution
-// 	holding_regs[1] = (uint16_t)(DIA * 1000);										// diameter in mm
-// 	holding_regs[2] = TIME;															// sample time in ms
-// 	holding_regs[3] = (uint16_t)floor(ProximityCounter_GetRPM(&proximity_counter)); // current RPM
-// }
+static void HoldingRegs_Refresh(void)
+{
+	// memset(holding_regs, 0, sizeof(holding_regs));
+	holding_regs[0] = PPR;															// pulses per revolution
+	holding_regs[1] = (uint16_t)(DIA * 1000);										// diameter in mm
+	holding_regs[2] = TIME;															// sample time in ms
+	holding_regs[3] = 1234; // current RPM
+}
 
 // static void Handle_Buttons(void)
 // {
@@ -472,7 +472,7 @@ void on_read_holding_registers(uint16_t addr, uint16_t quantity)
 	holding_regs[0] = PPR;
 	holding_regs[1] = (uint16_t)(DIA * 1000);
 	holding_regs[2] = TIME;
-	holding_regs[3] = (uint16_t)floor(ProximityCounter_GetRPM(&proximity_counter));
+	holding_regs[3] = 1234;
 }
 void on_write_single_register(uint16_t addr, uint16_t value)
 {
