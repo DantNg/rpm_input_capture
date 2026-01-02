@@ -35,7 +35,8 @@ void send_response(uint8_t *data, uint16_t len) {
 }
 
 static void send_tcp_response(uint16_t tid, uint8_t uid, const uint8_t *pdu, uint16_t pdu_len) {
-	uint8_t buf[256];
+	// FIX: Use static buffer to avoid corruption during DMA transmission
+	static uint8_t buf[256];
 	uint16_t idx = 0;
 	// MBAP Header
 	buf[idx++] = (uint8_t)(tid >> 8);      // Transaction ID high
@@ -49,6 +50,15 @@ static void send_tcp_response(uint16_t tid, uint8_t uid, const uint8_t *pdu, uin
 	// PDU
 	memcpy(&buf[idx], pdu, pdu_len);
 	idx = (uint16_t)(idx + pdu_len);
+	
+	// FIX: Debug TCP response frame
+	printf("📤 TCP Resp[%d]: ", idx);
+	for (int i = 0; i < idx && i < 32; i++) { // Limit to first 32 bytes
+		printf("%02X ", buf[i]);
+	}
+	if (idx > 32) printf("...");
+	printf("\r\n");
+	
 	MODBUS_SET_DE_TX();
 	HAL_UART_Transmit_DMA(modbus_uart, buf, idx);
 }
@@ -100,9 +110,20 @@ void modbus_slave_handle_frame(const uint8_t *frame, uint16_t len) {
 					resp_pdu_len = build_exception_pdu(resp_pdu, fn, 0x02);
 					break;
 				}
+				
+				// FIX: Call callback to refresh data
 				if (slave_cfg.on_read_holding_registers) {
 					slave_cfg.on_read_holding_registers(addr, count);
 				}
+				
+				// FIX: Debug registers before building response
+				printf("📋 Read Regs[%d:%d]: ", addr, count);
+				for (uint16_t i = 0; i < count && i < 8; i++) { // Limit debug output
+					printf("R%d=%04X ", addr + i, slave_cfg.holding_registers[addr + i]);
+				}
+				if (count > 8) printf("...");
+				printf("\r\n");
+				
 				resp_pdu[0] = fn;
 				resp_pdu[1] = (uint8_t)(count * 2);
 				for (uint16_t i = 0; i < count; i++) {

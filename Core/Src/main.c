@@ -534,7 +534,11 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if (huart->Instance == USART2)
 	{
-		// Ngay khi gửi xong, chuyển về chế độ nhận (DE=LOW) bằng macro
+		// FIX: Add small delay to ensure complete frame transmission over RS485
+		volatile uint32_t delay = 200; // Small delay cycles
+		while(delay--) { __NOP(); }
+		
+		// Switch back to RX mode (DE=LOW)
 		MODBUS_SET_DE_RX();
 	}
 }
