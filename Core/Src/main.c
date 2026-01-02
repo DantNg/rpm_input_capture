@@ -395,53 +395,6 @@ static void HoldingRegs_Refresh(void)
 	holding_regs[3] = (uint16_t)floor(ProximityCounter_GetRPM(&proximity_counter)); // current RPM
 }
 
-// static void Handle_Buttons(void)
-// {
-// 	static bool emergency_save_done = false;
-
-// 	if (HAL_GPIO_ReadPin(POWER_STATUS_GPIO_PORT, POWER_STATUS_PIN) == GPIO_PIN_SET)
-// 	{
-// 		// Power loss detected - emergency save all critical parameters
-// 		if (!emergency_save_done)
-// 		{
-// 			// 1. Save current length (highest priority - measurement data)
-// 			uint32_t current_length_mm = 0;
-// 			myFlash_SaveLength(current_length_mm);
-
-// 			// 2. Save encoder params
-// 			myEncoderParams enc_params = {
-// 				.diameter = (uint32_t)(DIA * 1000), // Convert to mm
-// 				.pulsesPerRev = PPR,
-// 				.sampleTimeMs = TIME,
-// 			};
-// 			myFlash_SaveEncoderParams(&enc_params);
-
-// 			// 3. Save UART params
-// 			myUARTParams p;
-// 			p.baudRate = MODBUS_PORT.Init.BaudRate;
-// 			p.parity = parity;
-// 			p.stopBits = (MODBUS_PORT.Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
-// 			p.frameTimeoutMs = TIME;
-// 			myFlash_SaveUARTParams(&p);
-
-// 			emergency_save_done = true;
-// 		}
-
-// 		// Minimal delay to debounce, then wait for power restoration or complete loss
-// 		uint32_t start_time = HAL_GetTick();
-// 		while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) == GPIO_PIN_SET && (HAL_GetTick() - start_time) < 100)
-// 		{
-// 			// Keep watchdog alive during power loss event
-// 			HAL_IWDG_Refresh(&hiwdg);
-// 		}
-
-// 		// Reset flag when power is restored
-// 		if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) == GPIO_PIN_RESET)
-// 		{
-// 			emergency_save_done = false;
-// 		}
-// 	}
-// }
 
 void HAL_UART_IDLE_Callback(UART_HandleTypeDef *huart)
 {
@@ -466,14 +419,7 @@ void HAL_UART_IDLE_Callback(UART_HandleTypeDef *huart)
 		HAL_UART_Receive_DMA(huart, uart_rx_buffer, UART_RX_BUFFER_SIZE);
 	}
 }
-// // Modbus Functions handler
-// void on_read_holding_registers(uint16_t addr, uint16_t quantity)
-// {
-// 	holding_regs[0] = PPR;
-// 	holding_regs[1] = (uint16_t)(DIA * 1000);
-// 	holding_regs[2] = TIME;
-// 	holding_regs[3] = 1234;
-// }
+
 void on_write_single_register(uint16_t addr, uint16_t value)
 {
 	switch (addr)
@@ -495,6 +441,17 @@ void on_write_single_register(uint16_t addr, uint16_t value)
 		break;														 // thời gian lấy mẫu (ms)
 	default:
 		break;
+	}
+	// Auto save to Flash after any parameter update
+	if (addr >= 0 && addr <= 2)
+	{
+		myEncoderParams enc_params = {
+			.diameter = (uint32_t)(DIA * 1000), // Convert to mm
+			.pulsesPerRev = PPR,
+			.timeout = TIMEOUT,
+			.sampleTimeMs = TIME,
+		};
+		myFlash_SaveEncoderParams(&enc_params);
 	}
 }
 void on_write_multiple_registers(uint16_t addr, const uint16_t *values,
@@ -524,9 +481,6 @@ void modbus_slave_setup(uint8_t slave_id)
 		.on_write_multiple_registers = on_write_multiple_registers};
 	modbus_init_slave(&MODBUS_PORT, &slave_cfg, MODBUS_MODE_TCP);
 	memset(holding_regs, 0, sizeof(holding_regs));
-	// holding_regs[0] = PPR;		  // số xung
-	// holding_regs[1] = (uint16_t)(DIA * 1000); // đường kính (mm)
-	// holding_regs[2] = TIME;		  // thời gian lấy mẫu(ms)
 	MODBUS_SET_DE_RX(); // DE = LOW (RX mode)
 }
 
@@ -793,7 +747,6 @@ int main(void)
 			}
 		}
 		HoldingRegs_Refresh();
-		// Handle_Buttons();
 
 		queue_frame_t frame;
 		if (queue_pop(&frame))
