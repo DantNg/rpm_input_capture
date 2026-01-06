@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-// Forward declaration for UART3 DMA restart function
+// Forward declaration for uart2 DMA restart function
 void Restart_MODBUS_DMA(void);
 
 #ifdef __cplusplus
@@ -40,7 +40,7 @@ typedef struct {
     uint32_t *parity;
     MeasurementMode_t *measurement_mode;
     UART_HandleTypeDef *command_port;
-    UART_HandleTypeDef *modbus_port; // Changed from huart3 to modbus_port for clarity
+    UART_HandleTypeDef *modbus_port; 
     void *encoder;
     void *htim;
     uint8_t slave_id;
