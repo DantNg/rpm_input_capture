@@ -385,6 +385,14 @@ static void Apply_Modbus_UART_Params(const myModbusUARTParams *p)
 
 static void Update_HoldingRegisters(void)
 {
+	// Limit update rate to reduce interference with Modbus communication
+	static uint32_t last_update_time = 0;
+	uint32_t now = HAL_GetTick();
+	if (now - last_update_time < 50) { // Update max every 50ms (20Hz)
+		return;
+	}
+	last_update_time = now;
+	
 	// Update basic parameters
 	holding_regs[0] = PPR;
 	holding_regs[1] = (uint16_t)(DIA * 1000);
@@ -509,11 +517,7 @@ void HAL_UART_IDLE_Callback(UART_HandleTypeDef *huart)
 	}
 }
 // Modbus Functions handler
-void on_read_holding_registers(uint16_t addr, uint16_t quantity)
-{
-	// Holding registers are now updated in main loop to avoid interference
-	// Data is ready to be read by Modbus master
-}
+
 void on_write_single_register(uint16_t addr, uint16_t value)
 {
 	switch (addr)
@@ -614,7 +618,7 @@ void modbus_slave_setup(uint8_t slave_id)
 		.input_register_count = 0,
 		.on_read_coils = NULL,
 		.on_read_discrete_inputs = NULL,
-		.on_read_holding_registers = on_read_holding_registers,
+		.on_read_holding_registers = NULL,
 		.on_read_input_registers = NULL,
 		.on_write_single_coil = NULL,
 		.on_write_single_register = on_write_single_register,
@@ -622,9 +626,6 @@ void modbus_slave_setup(uint8_t slave_id)
 		.on_write_multiple_registers = on_write_multiple_registers};
 	modbus_init_slave(&MODBUS_PORT, &slave_cfg, MODBUS_MODE_TCP);
 	memset(holding_regs, 0, sizeof(holding_regs));
-	// holding_regs[0] = PPR;		  // số xung
-	// holding_regs[1] = (uint16_t)(DIA * 1000); // đường kính (mm)
-	// holding_regs[2] = TIME;		  // thời gian lấy mẫu(ms)
 	MODBUS_SET_DE_RX(); // DE = LOW (RX mode)
 }
 
