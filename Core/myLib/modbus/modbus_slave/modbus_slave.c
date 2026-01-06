@@ -274,8 +274,10 @@ void modbus_slave_handle_frame(const uint8_t *frame, uint16_t len) {
 		if (5 + count * 2 > sizeof(modbus_tx_buffer))
 			return;
 		
-		// Remove callback call to avoid race condition with main loop updates
-		// Data is already updated in main loop at controlled rate
+		// Fast callback to copy pre-calculated data from volatile cache
+		if (slave_cfg.on_read_holding_registers) {
+			slave_cfg.on_read_holding_registers(addr, count);
+		}
 		
 		// Clear the entire static buffer first
 		memset(modbus_tx_buffer, 0, sizeof(modbus_tx_buffer));

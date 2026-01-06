@@ -383,37 +383,43 @@ static void Apply_Modbus_UART_Params(const myModbusUARTParams *p)
 	Restart_MODBUS_DMA();
 }
 
+// Cached data for fast Modbus response - avoid calculations during callback
+static volatile uint16_t cached_ppr = 600;
+static volatile uint16_t cached_dia_mm = 250;
+static volatile uint16_t cached_time = 100;
+static volatile uint16_t cached_data_reg3 = 0;
+static volatile uint16_t cached_data_reg4 = 0;
+
 static void Update_HoldingRegisters(void)
 {
-	// Limit update rate to reduce interference with Modbus communication
+	// Limit update rate to reduce CPU load during high-frequency Modbus requests
 	static uint32_t last_update_time = 0;
 	uint32_t now = HAL_GetTick();
-	if (now - last_update_time < 50) { // Update max every 50ms (20Hz)
+	if (now - last_update_time < 20) { // Update max every 20ms (50Hz) - faster for 1ms requests
 		return;
 	}
 	last_update_time = now;
 	
-	// Update basic parameters
-	holding_regs[0] = PPR;
-	holding_regs[1] = (uint16_t)(DIA * 1000);
-	holding_regs[2] = TIME;
+	// Update basic parameters in volatile cache
+	cached_ppr = PPR;
+	cached_dia_mm = (uint16_t)(DIA * 1000);
+	cached_time = TIME;
 	
 	// Get current speed display unit setting
 	extern SpeedDisplayUnit_t CommandHandler_GetSpeedDisplayUnit(void);
 	SpeedDisplayUnit_t speed_unit = CommandHandler_GetSpeedDisplayUnit();
 	
-	// Only show value based on current measurement mode
+	// Pre-calculate data based on current measurement mode
 	if (current_measurement_mode == MEASUREMENT_MODE_RPM)
 	{
-		holding_regs[3] = 0; // Length = 0 in RPM mode
+		cached_data_reg3 = 0; // Length = 0 in RPM mode
 		// Show speed according to current display unit setting
 		if (speed_unit == SPEED_UNIT_RPM) {
-			holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
+			cached_data_reg4 = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
 		} else {
 			// For m/min, use scaling factor of 10 instead of 100 to avoid overflow
-			// This gives 1 decimal place precision (e.g., 228.4 instead of 2284.0)
 			uint32_t speed_scaled = (uint32_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN) * 10);
-			holding_regs[4] = (speed_scaled > 65535) ? 65535 : (uint16_t)speed_scaled;
+			cached_data_reg4 = (speed_scaled > 65535) ? 65535 : (uint16_t)speed_scaled;
 		}
 	}
 	else if (current_measurement_mode == MEASUREMENT_MODE_LENGTH)
@@ -422,18 +428,18 @@ static void Update_HoldingRegisters(void)
 		// Length in mm (multiply by 1000 to convert from meters)
 		uint32_t length_mm = (uint32_t)(Encoder_GetCurrentLength(&enc2) * 1000);
 		
-		holding_regs[3] = (uint16_t)(length_mm & 0xFFFF);        // Lower 16 bits
-		holding_regs[4] = (uint16_t)((length_mm >> 16) & 0xFFFF); // Upper 16 bits
+		cached_data_reg3 = (uint16_t)(length_mm & 0xFFFF);        // Lower 16 bits
+		cached_data_reg4 = (uint16_t)((length_mm >> 16) & 0xFFFF); // Upper 16 bits
 	}
 	else
 	{
 		// Default: show both values, speed according to display unit
-		holding_regs[3] = (uint16_t)(Encoder_GetCurrentLength(&enc2) * 1000);
+		cached_data_reg3 = (uint16_t)(Encoder_GetCurrentLength(&enc2) * 1000);
 		if (speed_unit == SPEED_UNIT_RPM) {
-			holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
+			cached_data_reg4 = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
 		} else {
 			uint32_t speed_scaled = (uint32_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN) * 10);
-			holding_regs[4] = (speed_scaled > 65535) ? 65535 : (uint16_t)speed_scaled;
+			cached_data_reg4 = (speed_scaled > 65535) ? 65535 : (uint16_t)speed_scaled;
 		}
 	}
 }
@@ -517,6 +523,16 @@ void HAL_UART_IDLE_Callback(UART_HandleTypeDef *huart)
 	}
 }
 // Modbus Functions handler
+void on_read_holding_registers(uint16_t addr, uint16_t quantity)
+{
+	// Fast copy from pre-calculated volatile cache to avoid calculations during callback
+	// This is critical for 1ms request intervals from Modbus master
+	holding_regs[0] = cached_ppr;
+	holding_regs[1] = cached_dia_mm; 
+	holding_regs[2] = cached_time;
+	holding_regs[3] = cached_data_reg3;
+	holding_regs[4] = cached_data_reg4;
+}
 
 void on_write_single_register(uint16_t addr, uint16_t value)
 {
@@ -618,7 +634,7 @@ void modbus_slave_setup(uint8_t slave_id)
 		.input_register_count = 0,
 		.on_read_coils = NULL,
 		.on_read_discrete_inputs = NULL,
-		.on_read_holding_registers = NULL,
+		.on_read_holding_registers = on_read_holding_registers,
 		.on_read_input_registers = NULL,
 		.on_write_single_coil = NULL,
 		.on_write_single_register = on_write_single_register,
