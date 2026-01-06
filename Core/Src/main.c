@@ -383,6 +383,53 @@ static void Apply_Modbus_UART_Params(const myModbusUARTParams *p)
 	Restart_MODBUS_DMA();
 }
 
+static void Update_HoldingRegisters(void)
+{
+	// Update basic parameters
+	holding_regs[0] = PPR;
+	holding_regs[1] = (uint16_t)(DIA * 1000);
+	holding_regs[2] = TIME;
+	
+	// Get current speed display unit setting
+	extern SpeedDisplayUnit_t CommandHandler_GetSpeedDisplayUnit(void);
+	SpeedDisplayUnit_t speed_unit = CommandHandler_GetSpeedDisplayUnit();
+	
+	// Only show value based on current measurement mode
+	if (current_measurement_mode == MEASUREMENT_MODE_RPM)
+	{
+		holding_regs[3] = 0; // Length = 0 in RPM mode
+		// Show speed according to current display unit setting
+		if (speed_unit == SPEED_UNIT_RPM) {
+			holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
+		} else {
+			// For m/min, use scaling factor of 10 instead of 100 to avoid overflow
+			// This gives 1 decimal place precision (e.g., 228.4 instead of 2284.0)
+			uint32_t speed_scaled = (uint32_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN) * 10);
+			holding_regs[4] = (speed_scaled > 65535) ? 65535 : (uint16_t)speed_scaled;
+		}
+	}
+	else if (current_measurement_mode == MEASUREMENT_MODE_LENGTH)
+	{
+		// Use both register 3 and 4 to store length as 32-bit value to avoid overflow
+		// Length in mm (multiply by 1000 to convert from meters)
+		uint32_t length_mm = (uint32_t)(Encoder_GetCurrentLength(&enc2) * 1000);
+		
+		holding_regs[3] = (uint16_t)(length_mm & 0xFFFF);        // Lower 16 bits
+		holding_regs[4] = (uint16_t)((length_mm >> 16) & 0xFFFF); // Upper 16 bits
+	}
+	else
+	{
+		// Default: show both values, speed according to display unit
+		holding_regs[3] = (uint16_t)(Encoder_GetCurrentLength(&enc2) * 1000);
+		if (speed_unit == SPEED_UNIT_RPM) {
+			holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
+		} else {
+			uint32_t speed_scaled = (uint32_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN) * 10);
+			holding_regs[4] = (speed_scaled > 65535) ? 65535 : (uint16_t)speed_scaled;
+		}
+	}
+}
+
 static void Process_EncoderAndLength(void){
 	pulse_t = Encoder_GetPulse(&enc2);
 
@@ -464,48 +511,8 @@ void HAL_UART_IDLE_Callback(UART_HandleTypeDef *huart)
 // Modbus Functions handler
 void on_read_holding_registers(uint16_t addr, uint16_t quantity)
 {
-	holding_regs[0] = PPR;
-	holding_regs[1] = (uint16_t)(DIA * 1000);
-	holding_regs[2] = TIME;
-	
-	// Get current speed display unit setting
-	extern SpeedDisplayUnit_t CommandHandler_GetSpeedDisplayUnit(void);
-	SpeedDisplayUnit_t speed_unit = CommandHandler_GetSpeedDisplayUnit();
-	
-	// Only show value based on current measurement mode
-	if (current_measurement_mode == MEASUREMENT_MODE_RPM)
-	{
-		holding_regs[3] = 0; // Length = 0 in RPM mode
-		// Show speed according to current display unit setting
-		if (speed_unit == SPEED_UNIT_RPM) {
-			holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
-		} else {
-			// For m/min, use scaling factor of 10 instead of 100 to avoid overflow
-			// This gives 1 decimal place precision (e.g., 228.4 instead of 2284.0)
-			uint32_t speed_scaled = (uint32_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN) * 10);
-			holding_regs[4] = (speed_scaled > 65535) ? 65535 : (uint16_t)speed_scaled;
-		}
-	}
-	else if (current_measurement_mode == MEASUREMENT_MODE_LENGTH)
-	{
-		// Use both register 3 and 4 to store length as 32-bit value to avoid overflow
-		// Length in mm (multiply by 1000 to convert from meters)
-		uint32_t length_mm = (uint32_t)(Encoder_GetCurrentLength(&enc2) * 1000);
-		
-		holding_regs[3] = (uint16_t)(length_mm & 0xFFFF);        // Lower 16 bits
-		holding_regs[4] = (uint16_t)((length_mm >> 16) & 0xFFFF); // Upper 16 bits
-	}
-	else
-	{
-		// Default: show both values, speed according to display unit
-		holding_regs[3] = (uint16_t)(Encoder_GetCurrentLength(&enc2) * 1000);
-		if (speed_unit == SPEED_UNIT_RPM) {
-			holding_regs[4] = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
-		} else {
-			uint32_t speed_scaled = (uint32_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN) * 10);
-			holding_regs[4] = (speed_scaled > 65535) ? 65535 : (uint16_t)speed_scaled;
-		}
-	}
+	// Holding registers are now updated in main loop to avoid interference
+	// Data is ready to be read by Modbus master
 }
 void on_write_single_register(uint16_t addr, uint16_t value)
 {
@@ -835,6 +842,8 @@ int main(void)
 		CommandHandler_Process(&cmdh);
 		// Process proximity counter
 		Process_EncoderAndLength();
+		// Update holding registers for Modbus (at controlled rate)
+		Update_HoldingRegisters();
 		Handle_Buttons();
 		// Display speed according to current unit setting
 
