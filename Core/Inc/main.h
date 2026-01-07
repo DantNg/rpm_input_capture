@@ -57,6 +57,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define LEN_RST_Pin GPIO_PIN_9
+#define LEN_RST_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

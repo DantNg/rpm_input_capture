@@ -497,6 +497,15 @@ static void Handle_Buttons(void)
 			emergency_save_done = false;
 		}
 	}
+
+	if (HAL_GPIO_ReadPin(LEN_RST_GPIO_Port, LEN_RST_Pin) == GPIO_PIN_RESET)
+	{
+		// Reset length measurement
+		Encoder_ResetLength(&enc2);
+		printf("✅ Length measurement reset to 0\r\n");
+		// Debounce delay
+		HAL_Delay(500);
+	}
 }
 
 void HAL_UART_IDLE_Callback(UART_HandleTypeDef *huart)
@@ -1206,6 +1215,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : LEN_RST_Pin */
+  GPIO_InitStruct.Pin = LEN_RST_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(LEN_RST_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 

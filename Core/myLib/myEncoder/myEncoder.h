@@ -162,5 +162,7 @@ static inline float Encoder_GetCurrentRPM(Encoder_t* enc) {
 // Function declarations for encoder.c
 void Encoder_RegisterInstance(Encoder_t* enc);
 void Encoder_HandleTimerOverflow(void);
+// Reset length (and internal pulse counters) and persist length=0 to Flash
+void Encoder_ResetLength(Encoder_t* enc);
 
 #endif // ENCODER_INTERRUPT_H

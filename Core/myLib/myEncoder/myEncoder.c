@@ -1,4 +1,5 @@
 #include "myEncoder.h"
+#include "myFlash/myFlash.h"
 
 // Global encoder instance that can be accessed by interrupt handlers
 static Encoder_t* g_encoder_instance = NULL;
@@ -76,4 +77,27 @@ HAL_StatusTypeDef Encoder_InitFull(Encoder_t* enc, TIM_HandleTypeDef* htim, uint
     Encoder_Init(enc, htim, ppr, diameter_m, update_ms);
     
     return HAL_OK;
+}
+
+void Encoder_ResetLength(Encoder_t* enc) {
+    if (!enc || !enc->htim) return;
+
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+
+    // Reset software counters and cached values
+    enc->total_pulse = 0;
+    enc->last_total_pulse = 0;
+    enc->current_length = 0.0f;
+    enc->current_rpm = 0.0f;
+    enc->last_time_ms = HAL_GetTick();
+
+    // Reset hardware counter to zero
+    __HAL_TIM_SET_COUNTER(enc->htim, 0);
+    __HAL_TIM_CLEAR_IT(enc->htim, TIM_IT_UPDATE);
+
+    if (!primask) __enable_irq();
+
+    // Persist length=0 to Flash (units: mm as used elsewhere)
+    (void)myFlash_SaveLength(0U);
 }
