@@ -389,6 +389,7 @@ static volatile uint16_t cached_dia_mm = 250;
 static volatile uint16_t cached_time = 100;
 static volatile uint16_t cached_data_reg3 = 0;
 static volatile uint16_t cached_data_reg4 = 0;
+static volatile uint16_t cached_data_reg5 = 0;
 
 static void Update_HoldingRegisters(void)
 {
@@ -410,36 +411,44 @@ static void Update_HoldingRegisters(void)
 	SpeedDisplayUnit_t speed_unit = CommandHandler_GetSpeedDisplayUnit();
 	
 	// Pre-calculate data based on current measurement mode
+	// Always store length as 32-bit value in registers 3+4
+	uint32_t length_mm = (uint32_t)(Encoder_GetCurrentLength(&enc2) * 1000);
+	cached_data_reg3 = (uint16_t)(length_mm & 0xFFFF);        // Lower 16 bits
+	cached_data_reg4 = (uint16_t)((length_mm >> 16) & 0xFFFF); // Upper 16 bits
+	
 	if (current_measurement_mode == MEASUREMENT_MODE_RPM)
 	{
-		cached_data_reg3 = 0; // Length = 0 in RPM mode
-		// Show speed according to current display unit setting
+		// RPM mode: length in reg3+4, speed in reg5 (for consistency)
 		if (speed_unit == SPEED_UNIT_RPM) {
-			cached_data_reg4 = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
+			cached_data_reg5 = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
 		} else {
-			// For m/min, use scaling factor of 10 instead of 100 to avoid overflow
 			uint32_t speed_scaled = (uint32_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN) * 10);
-			cached_data_reg4 = (speed_scaled > 65535) ? 65535 : (uint16_t)speed_scaled;
+			cached_data_reg5 = (speed_scaled > 65535) ? 65535 : (uint16_t)speed_scaled;
 		}
 	}
 	else if (current_measurement_mode == MEASUREMENT_MODE_LENGTH)
 	{
-		// Use both register 3 and 4 to store length as 32-bit value to avoid overflow
-		// Length in mm (multiply by 1000 to convert from meters)
-		uint32_t length_mm = (uint32_t)(Encoder_GetCurrentLength(&enc2) * 1000);
-		
-		cached_data_reg3 = (uint16_t)(length_mm & 0xFFFF);        // Lower 16 bits
-		cached_data_reg4 = (uint16_t)((length_mm >> 16) & 0xFFFF); // Upper 16 bits
+		// Length mode: only length in reg3+4, no speed data
+		cached_data_reg5 = 0;
+	}
+	else if (current_measurement_mode == MEASUREMENT_MODE_BOTH)
+	{
+		// Both mode: length in reg3+4, speed in reg5
+		if (speed_unit == SPEED_UNIT_RPM) {
+			cached_data_reg5 = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
+		} else {
+			uint32_t speed_scaled = (uint32_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN) * 10);
+			cached_data_reg5 = (speed_scaled > 65535) ? 65535 : (uint16_t)speed_scaled;
+		}
 	}
 	else
 	{
-		// Default: show both values, speed according to display unit
-		cached_data_reg3 = (uint16_t)(Encoder_GetCurrentLength(&enc2) * 1000);
+		// Default fallback: length in reg3+4, speed in reg5
 		if (speed_unit == SPEED_UNIT_RPM) {
-			cached_data_reg4 = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
+			cached_data_reg5 = (uint16_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_RPM));
 		} else {
 			uint32_t speed_scaled = (uint32_t)(Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN) * 10);
-			cached_data_reg4 = (speed_scaled > 65535) ? 65535 : (uint16_t)speed_scaled;
+			cached_data_reg5 = (speed_scaled > 65535) ? 65535 : (uint16_t)speed_scaled;
 		}
 	}
 }
@@ -539,6 +548,7 @@ void on_read_holding_registers(uint16_t addr, uint16_t quantity)
 	holding_regs[2] = cached_time;
 	holding_regs[3] = cached_data_reg3;
 	holding_regs[4] = cached_data_reg4;
+	holding_regs[5] = cached_data_reg5;
 }
 
 void on_write_single_register(uint16_t addr, uint16_t value)
@@ -820,7 +830,7 @@ int main(void)
 
 	// Load measurement mode from Flash
 	uint32_t saved_mode = myFlash_LoadMeasurementMode();
-	if (saved_mode == 0xFFFFFFFFU || saved_mode > MEASUREMENT_MODE_RPM)
+	if (saved_mode == 0xFFFFFFFFU || saved_mode > MEASUREMENT_MODE_BOTH)
 	{
 		// Initialize to RPM mode if not set or invalid
 		current_measurement_mode = MEASUREMENT_MODE_RPM;
@@ -832,8 +842,9 @@ int main(void)
 	else
 	{
 		current_measurement_mode = (MeasurementMode_t)saved_mode;
-		printf("⬇️ Loaded measurement mode from Flash: %s\r\n",
-			   (current_measurement_mode == MEASUREMENT_MODE_LENGTH) ? "LENGTH" : "RPM");
+		const char* mode_name = (current_measurement_mode == MEASUREMENT_MODE_LENGTH) ? "LENGTH" : 
+							   (current_measurement_mode == MEASUREMENT_MODE_BOTH) ? "BOTH" : "RPM";
+		printf("⬇️ Loaded measurement mode from Flash: %s\r\n", mode_name);
 	}
 
 	// ----------------- modbus_port -----------------------------
@@ -897,9 +908,25 @@ int main(void)
 				float current_length = Encoder_GetCurrentLength(&enc2);
 				printf("Length: %.3f m\r\n", current_length);
 			}
+			else if (current_measurement_mode == MEASUREMENT_MODE_BOTH)
+			{
+				// Display both length and speed
+				float current_length = Encoder_GetCurrentLength(&enc2);
+				extern SpeedDisplayUnit_t CommandHandler_GetSpeedDisplayUnit(void);
+				SpeedDisplayUnit_t speed_unit = CommandHandler_GetSpeedDisplayUnit();
+				current_speed = Encoder_GetCurrentSpeed(&enc2, speed_unit);
+				
+				if (speed_unit == SPEED_UNIT_RPM) {
+					printf("Length: %.3f m | RPM: %.0f\r\n", current_length, floor(current_speed));
+				} else {
+					printf("Length: %.3f m | Speed: %.2f m/min\r\n", current_length, current_speed);
+				}
+			}
 			// Add support for speed m/min mode - can be triggered manually for testing
 			// You can change current_measurement_mode to other values via command interface
-			if (current_measurement_mode != MEASUREMENT_MODE_RPM && current_measurement_mode != MEASUREMENT_MODE_LENGTH)
+			if (current_measurement_mode != MEASUREMENT_MODE_RPM && 
+			    current_measurement_mode != MEASUREMENT_MODE_LENGTH && 
+			    current_measurement_mode != MEASUREMENT_MODE_BOTH)
 			{
 				// Display speed in m/min for any other mode
 				current_speed = Encoder_GetCurrentSpeed(&enc2, SPEED_UNIT_M_MIN);

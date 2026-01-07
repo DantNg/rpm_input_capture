@@ -4,7 +4,8 @@
 // Measurement mode enumeration
 typedef enum {
     MEASUREMENT_MODE_RPM = 0,
-    MEASUREMENT_MODE_LENGTH = 1
+    MEASUREMENT_MODE_LENGTH = 1,
+    MEASUREMENT_MODE_BOTH = 2
 } MeasurementMode_t;
 
 // Speed display unit enumeration

@@ -843,17 +843,33 @@ static void Process_ModeCommands(CommandHandler_t *handler, const char* cmd) {
             handler->config.encoder_init(handler->config.encoder, handler->config.htim,
                                        *handler->config.ppr, *handler->config.dia, *handler->config.timeout, *handler->config.time);
         }
+    } else if (strncmp(cmd, "mode both", 9) == 0) {
+        *handler->config.measurement_mode = MEASUREMENT_MODE_BOTH;
+        if (handler->config.save_measurement_mode && 
+            handler->config.save_measurement_mode(MEASUREMENT_MODE_BOTH) == HAL_OK) {
+            printf("✅ Switched to BOTH measurement mode and saved\r\n");
+        } else {
+            printf("✅ Switched to BOTH measurement mode (save failed)\r\n");
+        }
+        printf("📏🔄 System now displaying both length and speed\r\n");
+        if (handler->config.encoder_init) {
+            handler->config.encoder_init(handler->config.encoder, handler->config.htim,
+                                       *handler->config.ppr, *handler->config.dia, *handler->config.timeout, *handler->config.time);
+        }
     } else if (strcmp(cmd, "mode") == 0) {
         printf("=== CURRENT MODE ===\r\n");
         if (*handler->config.measurement_mode == MEASUREMENT_MODE_LENGTH) {
             printf("📏 Current mode: LENGTH measurement\r\n");
             printf("📊 Measuring: Distance in meters\r\n");
+        } else if (*handler->config.measurement_mode == MEASUREMENT_MODE_BOTH) {
+            printf("📏🔄 Current mode: BOTH measurement\r\n");
+            printf("📊 Measuring: Both length and speed simultaneously\r\n");
         } else {
             printf("🔄 Current mode: RPM measurement\r\n");
             printf("📊 Measuring: Rotational speed\r\n");
         }
     } else {
-        printf("❌ Invalid mode. Available: length, rpm\r\n");
+        printf("❌ Invalid mode. Available: length, rpm, both\r\n");
     }
 }
 
@@ -1079,6 +1095,7 @@ static void Show_Help(void) {
     printf("  mode         - Show current measurement mode\r\n");
     printf("  mode length  - Switch to length measurement mode\r\n");
     printf("  mode rpm     - Switch to RPM measurement mode\r\n");
+    printf("  mode both    - Switch to both length and speed display\r\n");
     printf("SPEED DISPLAY:\r\n");
     printf("  speed_unit       - Show current speed display unit\r\n");
     printf("  speed_unit rpm   - Set speed display to RPM\r\n");
