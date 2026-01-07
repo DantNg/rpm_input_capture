@@ -135,8 +135,8 @@ static inline const char* Encoder_GetSpeedUnitString(SpeedDisplayUnit_t display_
 }
 
 // Process encoder measurements and update holding registers
-static inline void Encoder_ProcessMeasurements(Encoder_t* enc, uint16_t* holding_regs, MeasurementMode_t measurement_mode) {
-    if (!enc || !holding_regs) return;
+static inline void Encoder_ProcessMeasurements(Encoder_t* enc, MeasurementMode_t measurement_mode) {
+    if (!enc) return;
     
 //    uint32_t now = HAL_GetTick();
     
@@ -145,35 +145,6 @@ static inline void Encoder_ProcessMeasurements(Encoder_t* enc, uint16_t* holding
     
     // Update RPM - GetRPM now handles timing internally
     enc->current_rpm = Encoder_GetRPM(enc);
-    
-    // Update holding registers based on measurement mode
-    if (measurement_mode == MEASUREMENT_MODE_RPM) {
-        // Get current speed display unit from command handler
-        extern SpeedDisplayUnit_t CommandHandler_GetSpeedDisplayUnit(void);
-        SpeedDisplayUnit_t speed_unit = CommandHandler_GetSpeedDisplayUnit();
-        float display_speed = Encoder_GetCurrentSpeed(enc, speed_unit);
-        
-        // Pack float speed into two 16-bit registers
-        uint32_t speed_bits = 0;
-        memcpy(&speed_bits, &display_speed, sizeof(display_speed));
-        // holding_regs[5] = (uint16_t)(speed_bits >> 16);
-        // holding_regs[6] = (uint16_t)(speed_bits & 0xFFFF);
-        
-        // Debug: Print speed values with unit for troubleshooting
-        // static uint32_t last_debug_time = 0;
-        // if (now - last_debug_time >= 1000) { // Print every 1 second
-        //     printf("🔄 Speed: %.2f %s | RPM: %.2f | Reg[5]: 0x%04X | Reg[6]: 0x%04X\r\n", 
-        //            (double)display_speed, Encoder_GetSpeedUnitString(speed_unit),
-        //            (double)enc->current_rpm, holding_regs[5], holding_regs[6]);
-        //     last_debug_time = now;
-        // }
-    } else {
-        // LENGTH mode: Pack float length into two 16-bit registers
-        uint32_t len_bits = 0;
-        memcpy(&len_bits, &enc->current_length, sizeof(enc->current_length));
-        // holding_regs[7] = (uint16_t)(len_bits >> 16);  // length high
-        // holding_regs[8] = (uint16_t)(len_bits & 0xFFFF);  // length low
-    }
 }
 
 // Get current length value (cached for performance)

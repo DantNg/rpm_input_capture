@@ -448,7 +448,7 @@ static void Process_EncoderAndLength(void){
 	pulse_t = Encoder_GetPulse(&enc2);
 
 	// Process encoder measurements and update holding registers
-	Encoder_ProcessMeasurements(&enc2, holding_regs, current_measurement_mode);
+	Encoder_ProcessMeasurements(&enc2, current_measurement_mode);
 }
 
 static void Handle_Buttons(void)
@@ -525,8 +525,6 @@ void HAL_UART_IDLE_Callback(UART_HandleTypeDef *huart)
 // Modbus Functions handler
 void on_read_holding_registers(uint16_t addr, uint16_t quantity)
 {
-	// Fast copy from pre-calculated volatile cache to avoid calculations during callback
-	// This is critical for 1ms request intervals from Modbus master
 	holding_regs[0] = cached_ppr;
 	holding_regs[1] = cached_dia_mm; 
 	holding_regs[2] = cached_time;

@@ -35,7 +35,7 @@ void send_response(uint8_t *data, uint16_t len) {
 }
 
 static void send_tcp_response(uint16_t tid, uint8_t uid, const uint8_t *pdu, uint16_t pdu_len) {
-	uint8_t buf[256];
+	static uint8_t buf[256];
 	uint16_t idx = 0;
 	// MBAP Header
 	buf[idx++] = (uint8_t)(tid >> 8);      // Transaction ID high
@@ -51,6 +51,7 @@ static void send_tcp_response(uint16_t tid, uint8_t uid, const uint8_t *pdu, uin
 	idx = (uint16_t)(idx + pdu_len);
 	MODBUS_SET_DE_TX();
 	HAL_UART_Transmit_DMA(modbus_uart, buf, idx);
+	HAL_Delay(1); // Small delay to ensure transmission starts
 }
 
 static uint16_t build_exception_pdu(uint8_t *out, uint8_t fn, uint8_t ex) {
