@@ -58,11 +58,11 @@ typedef struct {
 
 **4. UART Configuration** - Cấu hình UART:
 - `uart1 baud <rate>` - Set UART1 baud rate (2400-921600)
-- `uart2 baud <rate>` - Set uart2 baud rate (2400-921600)  
+- `uart3 baud <rate>` - Set uart3 baud rate (2400-921600)  
 - `uart1 parity <n>` - Set parity cho tất cả UART (0=None,1=Odd,2=Even)
 - `uart1 stop <n>` - Set UART1 stop bits (1 hoặc 2)
-- `uart2 stop <n>` - Set uart2 stop bits (1 hoặc 2)
-- Example: `uart1 baud 115200`, `uart2 parity 1`
+- `uart3 stop <n>` - Set uart3 stop bits (1 hoặc 2)
+- Example: `uart1 baud 115200`, `uart3 parity 1`
 - Response: `"✅ UART[1/3] [BAUD/PARITY/STOP] set to <value> and saved"`
 - Auto-save: Lưu cấu hình UART vào Flash
 
@@ -134,7 +134,7 @@ HYSTERESIS: 5 entries configured
 - `"❌ Invalid parameter"` - Tham số không hợp lệ
 - `"❌ Value out of range"` - Giá trị ngoài phạm vi cho phép
 - `"❌ Flash write failed"` - Lỗi ghi Flash memory
-- `"❌ Invalid UART command format. Use: uart1/uart2 <command>"` - Sai format lệnh UART
+- `"❌ Invalid UART command format. Use: uart1/uart3 <command>"` - Sai format lệnh UART
 
 **Command Examples**:
 ```
@@ -206,7 +206,7 @@ while(1) {
 ├─────────────────────────┤
 │   Modbus RTU Layer      │ ← Frame processing
 ├─────────────────────────┤ 
-│   RS485 Physical Layer  │ ← uart2 + DE control
+│   RS485 Physical Layer  │ ← uart3 + DE control
 └─────────────────────────┘
 ```
 
@@ -379,7 +379,7 @@ typedef struct {
 **Master Mode Setup**:
 ```c
 // Initialize Modbus Master
-ModbusMaster_Init(&huart2);  // Use uart2 for communication
+ModbusMaster_Init(&huart3);  // Use uart3 for communication
 
 // Configure RS485 DE pin
 Modbus_ConfigureDEPin(DE_GPIO_Port, DE_Pin);
@@ -410,7 +410,7 @@ ModbusSlave_Config_t slave_config = {
 };
 
 // Initialize slave
-ModbusSlave_Init(&slave_config, &huart2);
+ModbusSlave_Init(&slave_config, &huart3);
 
 // In main loop
 while(1) {
@@ -632,7 +632,7 @@ uint8_t data = Queue_Dequeue(&uart_queue);
 2. **Command Processing**: Xử lý lệnh từ UART1 với real-time response
 3. **RPM Measurement**: Đo proximity sensor với configurable hysteresis filtering
 4. **Speed Display**: Dynamic unit conversion (RPM ↔ m/min) dựa trên user preference
-5. **Modbus Communication**: Giao tiếp qua uart2 với enable/disable control
+5. **Modbus Communication**: Giao tiếp qua uart3 với enable/disable control
 6. **Configuration Save**: Auto-save mọi thay đổi vào Flash
 7. **Hysteresis Management**: Real-time cập nhật filtering parameters
 
@@ -682,7 +682,7 @@ while(1) {
 
 ### Pinout:
 - **UART1** (Debug): PA9 (TX), PA10 (RX)
-- **uart2** (Modbus): PB10 (TX), PB11 (RX)
+- **uart3** (Modbus): PB10 (TX), PB11 (RX)
 - **TIM2** (Proximity): PA0 (CH1 Input Capture)
 - **DE Control**: PB12 (Modbus DE pin)
 - **Power Status**: PA4 (Power loss detection)
@@ -708,7 +708,7 @@ make clean && make all
 ### Debug:
 - SWD debugging qua ST-Link
 - UART1 debug messages
-- Modbus monitoring qua uart2
+- Modbus monitoring qua uart3
 
 ## Troubleshooting
 
@@ -750,7 +750,7 @@ modbus disable    - Tắt Modbus communication
 
 # UART Configuration
 uart1 baud 115200 - Set UART1 baud rate
-uart2 baud 9600   - Set uart2 baud rate
+uart3 baud 9600   - Set uart3 baud rate
 uart1 parity 1    - Set parity = Odd (global)
 uart1 stop 2      - Set UART1 stop bits = 2
 

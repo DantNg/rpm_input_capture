@@ -8,7 +8,7 @@
 
 // UART Port definitions
 #define SERIAL_PORT1  1  // UART1 for debug/command
-#define SERIAL_PORT2  2  // uart2 for Modbus
+#define SERIAL_PORT2  3 // uart3 for Modbus
 
 // Forward declarations for internal functions
 static void Process_BasicCommands(CommandHandler_t *handler, const char* cmd);
@@ -312,10 +312,10 @@ static void Process_BasicCommands(CommandHandler_t *handler, const char* cmd) {
             printf("↔️  MODE: %s\r\n", mode_str);
         }
         
-        // Display uart2 (Modbus port) configuration details
+        // Display uart3 (Modbus port) configuration details
         UART_HandleTypeDef* modbus_uart = handler->config.modbus_port;
         if (modbus_uart) {
-            printf("=== uart2 (MODBUS) CONFIG ===\r\n");
+            printf("=== uart3 (MODBUS) CONFIG ===\r\n");
             printf("🔌 BAUD RATE: %lu bps\r\n", (unsigned long)modbus_uart->Init.BaudRate);
             
             // Parity information
@@ -464,11 +464,11 @@ static void Process_UARTCommands(CommandHandler_t *handler, const char* cmd) {
     if (strncmp(cmd, "uart1 ", 6) == 0) {
         port = SERIAL_PORT1;
         param_start = cmd + 6;
-    } else if (strncmp(cmd, "uart2 ", 6) == 0) {
+    } else if (strncmp(cmd, "uart3 ", 6) == 0) {
         port = SERIAL_PORT2;
         param_start = cmd + 6;
     } else {
-        printf("❌ Invalid UART command format. Use: uart1/uart2 <command>\r\n");
+        printf("❌ Invalid UART command format. Use: uart1/uart3 <command>\r\n");
         return;
     }
     
@@ -549,11 +549,11 @@ static void Process_ModbusUARTCommands(CommandHandler_t *handler, const char* cm
                 modbus_params.parity = *handler->config.parity;
                 modbus_params.stopBits = (handler->config.modbus_port->Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
                 modbus_params.frameTimeoutMs = *handler->config.time;
-                // Apply baud rate to uart2 only
+                // Apply baud rate to uart3 only
                 handler->config.modbus_port->Init.BaudRate = baud;
                 HAL_UART_DeInit(handler->config.modbus_port);
                 HAL_UART_Init(handler->config.modbus_port);
-                // Restart DMA for uart2
+                // Restart DMA for uart3
                 Restart_MODBUS_DMA();
                 
                 if (myFlash_SaveModbusUARTParams(&modbus_params) == HAL_OK) {
@@ -573,7 +573,7 @@ static void Process_ModbusUARTCommands(CommandHandler_t *handler, const char* cm
                 modbus_params.baudRate = handler->config.modbus_port->Init.BaudRate;
                 modbus_params.stopBits = (handler->config.modbus_port->Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
                 modbus_params.frameTimeoutMs = *handler->config.time;
-                // Apply parity to uart2 only
+                // Apply parity to uart3 only
                 switch (par) {
                     case 0: // NONE
                         handler->config.modbus_port->Init.Parity = UART_PARITY_NONE;
@@ -609,7 +609,7 @@ static void Process_ModbusUARTCommands(CommandHandler_t *handler, const char* cm
                 modbus_params.baudRate = handler->config.modbus_port->Init.BaudRate;
                 modbus_params.parity = *handler->config.parity;
                 modbus_params.frameTimeoutMs = *handler->config.time;
-                // Apply stop bits to uart2 only
+                // Apply stop bits to uart3 only
                 if (stop == 2) {
                     handler->config.modbus_port->Init.StopBits = UART_STOPBITS_2;
                 } else {
@@ -880,10 +880,10 @@ static void Process_ModbusCommands(CommandHandler_t *handler, const char* cmd) {
         printf("📡 STATUS: %s\r\n", modbus_enabled ? "ENABLED" : "DISABLED");
         printf("⏱️  TIMEOUT: %lums\r\n", (unsigned long)*handler->config.time);
         
-        // Display uart2 (Modbus port) configuration details
+        // Display uart3 (Modbus port) configuration details
         UART_HandleTypeDef* modbus_uart = handler->config.modbus_port;
         if (modbus_uart) {
-            printf("=== MODBUS uart2 CONFIG ===\r\n");
+            printf("=== MODBUS uart3 CONFIG ===\r\n");
             printf("🔌 BAUD RATE: %lu bps\r\n", (unsigned long)modbus_uart->Init.BaudRate);
             
             // Parity information
@@ -947,7 +947,7 @@ static void Process_ModbusCommands(CommandHandler_t *handler, const char* cmd) {
             }
             printf("↔️  MODE: %s\r\n", mode_str);
             
-            printf("💡 Standard Modbus TCP with uart config: 8N1 or 8E1 or 8O1\r\n");
+            printf("💡 Standard Modbus RTU with uart config: 8N1 or 8E1 or 8O1\r\n");
         }
         
         if (!modbus_enabled) {
@@ -1077,7 +1077,7 @@ static void Show_Help(void) {
     printf("  uart1 baud <rate>    - Set UART1 baud rate (2400-921600)\r\n");
     printf("  uart1 parity <n>     - Set UART1 parity (0=None,1=Odd,2=Even)\r\n");
     printf("  uart1 stop <n>       - Set UART1 stop bits (1 or 2)\r\n");
-    printf("MODBUS UART CONFIG (uart2):\r\n");
+    printf("MODBUS UART CONFIG (uart3):\r\n");
     printf("  modbus uart baud <rate>    - Set Modbus UART baud rate (2400-921600)\r\n");
     printf("  modbus uart parity <n>     - Set Modbus UART parity (0=None,1=Odd,2=Even)\r\n");
     printf("  modbus uart stop <n>       - Set Modbus UART stop bits (1 or 2)\r\n");

@@ -51,7 +51,7 @@ CommandHandler_t cmdh;
 // Chọn chế độ hoạt động
 // #define MODBUS_MASTER
 #define MODBUS_SLAVE
-#define MODBUS_PORT huart2
+#define MODBUS_PORT huart3
 #define COMMAND_PORT huart1
 uint32_t PPR = 600;
 float DIA = 0.25f;
@@ -96,9 +96,9 @@ TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim4;
 
 UART_HandleTypeDef huart1;
-UART_HandleTypeDef huart2;
-DMA_HandleTypeDef hdma_usart2_rx;
-DMA_HandleTypeDef hdma_usart2_tx;
+UART_HandleTypeDef huart3;
+DMA_HandleTypeDef hdma_usart3_rx;
+DMA_HandleTypeDef hdma_usart3_tx;
 
 /* USER CODE BEGIN PV */
 // ------------------- Printf --------------------------
@@ -138,7 +138,7 @@ static void MX_TIM2_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_IWDG_Init(void);
-static void MX_USART2_UART_Init(void);
+static void MX_USART3_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 // Proximity counter instance
@@ -161,115 +161,26 @@ void SetProximitySpeedUnit(int unit)
 
 void SetProximityHysteresis(int index, int rpm_threshold, int hysteresis)
 {
-	// if (index >= 0 && index < 10)
-	// {
-	// 	ProximityCounter_SetHysteresisEntry(&proximity_counter, index, rpm_threshold, hysteresis);
-	// 	printf("✅ Hysteresis[%d] set: RPM=%d, Threshold=%d\r\n", index, rpm_threshold, hysteresis);
-	// }
 }
 
 void ShowProximityHysteresis(void)
 {
-	// printf("=== CURRENT HYSTERESIS TABLE ===\r\n");
-	// printf("Index | RPM Threshold | Hysteresis\r\n");
-	// printf("------|---------------|----------\r\n");
-	// for (int i = 0; i < 10; i++)
-	// {
-	// 	ProximityHysteresisEntry_t entry;
-	// 	if (ProximityCounter_GetHysteresisEntry(&proximity_counter, i, &entry))
-	// 	{
-	// 		printf("  %d   |     %5d     |   %3d\r\n", i, entry.rpm_threshold, entry.hysteresis);
-	// 	}
-	// 	else
-	// 	{
-	// 		printf("  %d   |       ---     |   ---\r\n", i);
-	// 	}
-	// }
 	printf("💡 Use: hyst set <index> <rpm> <hysteresis>\r\n");
 }
 
 void ClearProximityHysteresis(void)
 {
-	// Clear by resetting the table size and reinitializing
-	// proximity_counter.hysteresis_table_size = 0;
 	printf("✅ Hysteresis table cleared\r\n");
 }
 
 void SaveProximityHysteresis(void)
 {
 	printf("💾 Saving hysteresis table to Flash...\r\n");
-//	printf("🔍 Current table has %d entries:\r\n", proximity_counter.hysteresis_table_size);
-
-	// myHysteresisTable table = {0};
-	// table.entry_count = proximity_counter.hysteresis_table_size;
-
-	// // Copy entries from proximity counter to Flash structure
-	// for (int i = 0; i < table.entry_count && i < 10; i++)
-	// {
-	// 	table.entries[i].rpm_threshold = proximity_counter.hysteresis_table[i].rpm_threshold;
-	// 	table.entries[i].hysteresis = proximity_counter.hysteresis_table[i].hysteresis;
-	// 	printf("  Entry %d: RPM=%d, Hyst=%d\r\n", i,
-	// 		   table.entries[i].rpm_threshold, table.entries[i].hysteresis);
-	// }
-
-	// if (myFlash_SaveHysteresisTable(&table) == HAL_OK)
-	// {
-	// 	printf("✅ Hysteresis table saved successfully (%d entries)\r\n", table.entry_count);
-
-	// 	// Verify save by reading back
-	// 	myHysteresisTable verify_table = {0};
-	// 	myFlash_LoadHysteresisTable(&verify_table);
-	// 	printf("🔍 Verification: entry_count=%d\r\n", verify_table.entry_count);
-	// }
-	// else
-	// {
-	// 	printf("❌ Failed to save hysteresis table to Flash\r\n");
-	// }
 }
 
 void LoadProximityHysteresis(void)
 {
 	printf("📖 Loading hysteresis table from Flash...\r\n");
-
-	// myHysteresisTable table = {0};
-	// myFlash_LoadHysteresisTable(&table);
-
-	// // Debug: Show what was loaded from Flash
-	// printf("🔍 Flash data: entry_count=%d (0x%02X)\r\n", table.entry_count, table.entry_count);
-
-	// // Check if data is valid (not uninitialized Flash)
-	// // Uninitialized flash will have entry_count = 0xFF (255)
-	// if (table.entry_count != 0xFF && table.entry_count <= 10 && table.entry_count > 0)
-	// {
-	// 	// Clear current table completely
-	// 	proximity_counter.hysteresis_table_size = 0;
-	// 	memset(proximity_counter.hysteresis_table, 0, sizeof(proximity_counter.hysteresis_table));
-
-	// 	// Load ALL entries from Flash to proximity counter at correct positions
-	// 	for (int i = 0; i < table.entry_count && i < 10; i++)
-	// 	{
-	// 		// Only skip entries with uninitialized Flash data (0xFFFF)
-	// 		if (table.entries[i].rpm_threshold != 0xFFFF && table.entries[i].hysteresis != 0xFFFF &&
-	// 			table.entries[i].hysteresis > 0)
-	// 		{ // Allow RPM=0, only check hysteresis > 0
-	// 			proximity_counter.hysteresis_table[i].rpm_threshold = table.entries[i].rpm_threshold;
-	// 			proximity_counter.hysteresis_table[i].hysteresis = table.entries[i].hysteresis;
-	// 			// Update table size to include this entry
-	// 			if (i >= proximity_counter.hysteresis_table_size)
-	// 			{
-	// 				proximity_counter.hysteresis_table_size = i + 1;
-	// 			}
-	// 			printf("  Entry %d: RPM=%d, Hyst=%d\r\n", i,
-	// 				   table.entries[i].rpm_threshold, table.entries[i].hysteresis);
-	// 		}
-	// 	}
-	// 	printf("✅ Loaded %d valid hysteresis entries from Flash\r\n", proximity_counter.hysteresis_table_size);
-	// }
-	// else
-	// {
-	// 	printf("⚠️  Invalid Flash data (entry_count=%d) - using default hysteresis table\r\n", table.entry_count);
-	// 	ProximityCounter_InitDefaultHysteresis(&proximity_counter);
-	// }
 }
 
 // Public function for modbus_port DMA restart
@@ -519,7 +430,7 @@ static void Handle_Buttons(void)
 
 void HAL_UART_IDLE_Callback(UART_HandleTypeDef *huart)
 {
-	if (huart->Instance == USART2)
+	if (huart->Instance == USART3)
 	{
 		uint16_t len = UART_RX_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(huart->hdmarx);
 		// Only accept plausible Modbus RTU frames (min 4 bytes incl. CRC)
@@ -657,14 +568,14 @@ void modbus_slave_setup(uint8_t slave_id)
 		.on_write_single_register = on_write_single_register,
 		.on_write_multiple_coils = NULL,
 		.on_write_multiple_registers = on_write_multiple_registers};
-	modbus_init_slave(&MODBUS_PORT, &slave_cfg, MODBUS_MODE_TCP);
+	modbus_init_slave(&MODBUS_PORT, &slave_cfg, MODBUS_MODE_RTU);
 	memset(holding_regs, 0, sizeof(holding_regs));
 	MODBUS_SET_DE_RX(); // DE = LOW (RX mode)
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
-	if (huart->Instance == USART2)
+	if (huart->Instance == USART3)
 	{
 		// Ngay khi gửi xong, chuyển về chế độ nhận (DE=LOW) bằng macro
 		MODBUS_SET_DE_RX();
@@ -706,7 +617,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_TIM4_Init();
   MX_IWDG_Init();
-  MX_USART2_UART_Init();
+  MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
 	// Load Debug Config from Flash
 	CommandHandler_InitDebugConfigFromFlash();
@@ -1156,35 +1067,35 @@ static void MX_USART1_UART_Init(void)
 }
 
 /**
-  * @brief USART2 Initialization Function
+  * @brief USART3 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_USART2_UART_Init(void)
+static void MX_USART3_UART_Init(void)
 {
 
-  /* USER CODE BEGIN USART2_Init 0 */
+  /* USER CODE BEGIN USART3_Init 0 */
 
-  /* USER CODE END USART2_Init 0 */
+  /* USER CODE END USART3_Init 0 */
 
-  /* USER CODE BEGIN USART2_Init 1 */
+  /* USER CODE BEGIN USART3_Init 1 */
 
-  /* USER CODE END USART2_Init 1 */
-  huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits = UART_STOPBITS_1;
-  huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
+  /* USER CODE END USART3_Init 1 */
+  huart3.Instance = USART3;
+  huart3.Init.BaudRate = 115200;
+  huart3.Init.WordLength = UART_WORDLENGTH_8B;
+  huart3.Init.StopBits = UART_STOPBITS_1;
+  huart3.Init.Parity = UART_PARITY_NONE;
+  huart3.Init.Mode = UART_MODE_TX_RX;
+  huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart3.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart3) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USART2_Init 2 */
+  /* USER CODE BEGIN USART3_Init 2 */
 
-  /* USER CODE END USART2_Init 2 */
+  /* USER CODE END USART3_Init 2 */
 
 }
 
@@ -1198,12 +1109,12 @@ static void MX_DMA_Init(void)
   __HAL_RCC_DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
-  /* DMA1_Channel6_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel6_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel6_IRQn);
-  /* DMA1_Channel7_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel7_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel7_IRQn);
+  /* DMA1_Channel2_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+  /* DMA1_Channel3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
 
 }
 
@@ -1225,9 +1136,6 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET);
-
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PA3 PA4 */
@@ -1236,8 +1144,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB11 PB12 */
-  GPIO_InitStruct.Pin = GPIO_PIN_11|GPIO_PIN_12;
+  /*Configure GPIO pin : PB12 */
+  GPIO_InitStruct.Pin = GPIO_PIN_12;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
