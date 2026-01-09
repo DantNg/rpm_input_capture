@@ -546,9 +546,9 @@ static void Process_ModbusUARTCommands(CommandHandler_t *handler, const char* cm
                 myModbusUARTParams modbus_params;
                 myFlash_LoadModbusUARTParams(&modbus_params);
                 modbus_params.baudRate = baud;
-                modbus_params.parity = *handler->config.parity;
-                modbus_params.stopBits = (handler->config.modbus_port->Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
-                modbus_params.frameTimeoutMs = *handler->config.time;
+                // modbus_params.parity = *handler->config.parity;
+                // modbus_params.stopBits = (handler->config.modbus_port->Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
+                // modbus_params.frameTimeoutMs = *handler->config.time;
                 // Apply baud rate to uart2 only
                 handler->config.modbus_port->Init.BaudRate = baud;
                 HAL_UART_DeInit(handler->config.modbus_port);
@@ -570,9 +570,9 @@ static void Process_ModbusUARTCommands(CommandHandler_t *handler, const char* cm
                 myModbusUARTParams modbus_params;
                 myFlash_LoadModbusUARTParams(&modbus_params);
                 modbus_params.parity = par;
-                modbus_params.baudRate = handler->config.modbus_port->Init.BaudRate;
-                modbus_params.stopBits = (handler->config.modbus_port->Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
-                modbus_params.frameTimeoutMs = *handler->config.time;
+                // modbus_params.baudRate = handler->config.modbus_port->Init.BaudRate;
+                // modbus_params.stopBits = (handler->config.modbus_port->Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
+                // modbus_params.frameTimeoutMs = *handler->config.time;
                 // Apply parity to uart2 only
                 switch (par) {
                     case 0: // NONE
@@ -606,9 +606,9 @@ static void Process_ModbusUARTCommands(CommandHandler_t *handler, const char* cm
                 myModbusUARTParams modbus_params;
                 myFlash_LoadModbusUARTParams(&modbus_params);
                 modbus_params.stopBits = stop;
-                modbus_params.baudRate = handler->config.modbus_port->Init.BaudRate;
-                modbus_params.parity = *handler->config.parity;
-                modbus_params.frameTimeoutMs = *handler->config.time;
+                // modbus_params.baudRate = handler->config.modbus_port->Init.BaudRate;
+                // modbus_params.parity = *handler->config.parity;
+                // modbus_params.frameTimeoutMs = *handler->config.time;
                 // Apply stop bits to uart2 only
                 if (stop == 2) {
                     handler->config.modbus_port->Init.StopBits = UART_STOPBITS_2;
@@ -633,9 +633,9 @@ static void Process_ModbusUARTCommands(CommandHandler_t *handler, const char* cm
                 myModbusUARTParams modbus_params;
                 myFlash_LoadModbusUARTParams(&modbus_params);
                 modbus_params.frameTimeoutMs = timeout;
-                modbus_params.baudRate = handler->config.modbus_port->Init.BaudRate;
-                modbus_params.parity = *handler->config.parity;
-                modbus_params.stopBits = (handler->config.modbus_port->Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
+                // modbus_params.baudRate = handler->config.modbus_port->Init.BaudRate;
+                // modbus_params.parity = *handler->config.parity;
+                // modbus_params.stopBits = (handler->config.modbus_port->Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
                 // Apply timeout to global config
                 if (myFlash_SaveModbusUARTParams(&modbus_params) == HAL_OK) {
                     printf("✅ Modbus FRAME TIMEOUT set to %lu ms and saved\r\n", (unsigned long)timeout);
@@ -878,7 +878,6 @@ static void Process_ModbusCommands(CommandHandler_t *handler, const char* cmd) {
         printf("=== MODBUS STATUS ===\r\n");
         printf("🔗 SLAVE ID: 0x%02X (%d)\r\n", current_slave_id, current_slave_id);
         printf("📡 STATUS: %s\r\n", modbus_enabled ? "ENABLED" : "DISABLED");
-        printf("⏱️  TIMEOUT: %lums\r\n", (unsigned long)*handler->config.time);
         
         // Display uart2 (Modbus port) configuration details
         UART_HandleTypeDef* modbus_uart = handler->config.modbus_port;
@@ -947,7 +946,6 @@ static void Process_ModbusCommands(CommandHandler_t *handler, const char* cmd) {
             }
             printf("↔️  MODE: %s\r\n", mode_str);
             
-            printf("💡 Standard Modbus TCP with uart config: 8N1 or 8E1 or 8O1\r\n");
         }
         
         if (!modbus_enabled) {
