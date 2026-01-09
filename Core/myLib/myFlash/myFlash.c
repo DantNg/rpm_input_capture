@@ -171,6 +171,8 @@ HAL_StatusTypeDef myFlash_SaveModbusUARTParams(const myModbusUARTParams *params)
     buffer[1] = params->parity;
     buffer[2] = params->stopBits;
     buffer[3] = params->frameTimeoutMs;
+    printf("Saving Modbus UART Params: Baud=%lu, Parity=%lu, StopBits=%lu, Timeout=%lu\r\n",
+           (unsigned long)buffer[0], (unsigned long)buffer[1], (unsigned long)buffer[2], (unsigned long)buffer[3]);
     return NVS_WriteWords(MYFLASH_PAGE_MODBUS_UART, buffer, 4U);
 }
 

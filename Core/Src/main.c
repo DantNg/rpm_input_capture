@@ -680,7 +680,7 @@ int main(void)
 	}
 
 	// Load modbus_port (Modbus) params from Flash
-	myModbusUARTParams saved_modbus_uart = {115200U, 0U, 1U, 100U};
+	myModbusUARTParams saved_modbus_uart = {115200U, 0U, 1U, 100U}; // baud, parity, stop, timeout
 	myFlash_LoadModbusUARTParams(&saved_modbus_uart);
 
 	Apply_Modbus_UART_Params(&saved_modbus_uart);
