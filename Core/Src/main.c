@@ -382,63 +382,6 @@ static void Apply_Modbus_UART_Params(const myModbusUARTParams *p)
 	Restart_MODBUS_DMA();
 }
 
-// static void HoldingRegs_Refresh(void)
-// {
-// 	memset(holding_regs, 0, sizeof(holding_regs));
-// 	holding_regs[0] = PPR;															// pulses per revolution
-// 	holding_regs[1] = (uint16_t)(DIA * 1000);										// diameter in mm
-// 	holding_regs[2] = TIME;															// sample time in ms
-// 	holding_regs[3] = (uint16_t)floor(ProximityCounter_GetRPM(&proximity_counter)); // current RPM
-// }
-
-// static void Handle_Buttons(void)
-// {
-// 	static bool emergency_save_done = false;
-
-// 	if (HAL_GPIO_ReadPin(POWER_STATUS_GPIO_PORT, POWER_STATUS_PIN) == GPIO_PIN_SET)
-// 	{
-// 		// Power loss detected - emergency save all critical parameters
-// 		if (!emergency_save_done)
-// 		{
-// 			// 1. Save current length (highest priority - measurement data)
-// 			uint32_t current_length_mm = 0;
-// 			myFlash_SaveLength(current_length_mm);
-
-// 			// 2. Save encoder params
-// 			myEncoderParams enc_params = {
-// 				.diameter = (uint32_t)(DIA * 1000), // Convert to mm
-// 				.pulsesPerRev = PPR,
-// 				.sampleTimeMs = TIME,
-// 			};
-// 			myFlash_SaveEncoderParams(&enc_params);
-
-// 			// 3. Save UART params
-// 			myUARTParams p;
-// 			p.baudRate = MODBUS_PORT.Init.BaudRate;
-// 			p.parity = parity;
-// 			p.stopBits = (MODBUS_PORT.Init.StopBits == UART_STOPBITS_2) ? 2U : 1U;
-// 			p.frameTimeoutMs = TIME;
-// 			myFlash_SaveUARTParams(&p);
-
-// 			emergency_save_done = true;
-// 		}
-
-// 		// Minimal delay to debounce, then wait for power restoration or complete loss
-// 		uint32_t start_time = HAL_GetTick();
-// 		while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) == GPIO_PIN_SET && (HAL_GetTick() - start_time) < 100)
-// 		{
-// 			// Keep watchdog alive during power loss event
-// 			HAL_IWDG_Refresh(&hiwdg);
-// 		}
-
-// 		// Reset flag when power is restored
-// 		if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) == GPIO_PIN_RESET)
-// 		{
-// 			emergency_save_done = false;
-// 		}
-// 	}
-// }
-
 void HAL_UART_IDLE_Callback(UART_HandleTypeDef *huart)
 {
 	if (huart->Instance == USART3)
@@ -465,10 +408,69 @@ void HAL_UART_IDLE_Callback(UART_HandleTypeDef *huart)
 // Modbus Functions handler
 void on_read_holding_registers(uint16_t addr, uint16_t quantity)
 {
-	holding_regs[0] = PPR;
-	holding_regs[1] = (uint16_t)(DIA * 1000);
-	holding_regs[2] = TIME;
-	holding_regs[3] = (uint16_t)floor(ProximityCounter_GetRPM(&proximity_counter));
+	/*
+	 * ========================================
+	 * DEMO: Gửi dữ liệu uint32_t, int32_t, float qua Modbus
+	 * ========================================
+	 * Mỗi kiểu dữ liệu 32-bit được chia thành 2 registers 16-bit
+	 * Sử dụng Little-Endian format (LSB trước) cho tương thích tốt
+	 */
+	
+	// ===== DỮ LIỆU DEMO =====
+	uint32_t demo_uint32 = 0x12345678;   // Số dương 32-bit: 305419896
+	int32_t demo_int32 = -123456789;     // Số âm 32-bit: -123456789
+	float demo_float = 3.14159f;         // Số thực: π (pi)
+	
+	// ===== XỬ LÝ UINT32_T (Registers 0-1) =====
+	/*
+	 * uint32_t: 0x12345678 = 305419896
+	 * - Lower 16 bits: 0x5678 = 22136
+	 * - Upper 16 bits: 0x1234 = 4660
+	 * Little-Endian: LSB đầu tiên
+	 */
+	holding_regs[0] = (uint16_t)(demo_uint32 & 0xFFFF);        // Reg 0: 0x5678 (LSB)
+	holding_regs[1] = (uint16_t)((demo_uint32 >> 16) & 0xFFFF); // Reg 1: 0x1234 (MSB)
+	
+	// ===== XỬ LÝ INT32_T (Registers 2-3) =====
+	/*
+	 * int32_t: -123456789 trong Two's complement
+	 * QUAN TRỌNG: Không thể cast trực tiếp int32_t sang uint16_t
+	 * vì sẽ mất thông tin dấu và bit representation
+	 * => Sử dụng union để chuyển đổi bit-by-bit an toàn
+	 */
+	union {
+		int32_t i32;    // View dưới dạng số nguyên có dấu
+		uint32_t u32;   // View dưới dạng số nguyên không dấu (cùng bit pattern)
+	} int_converter;
+	
+	int_converter.i32 = demo_int32;  // Gán giá trị int32_t
+	// Giờ đây u32 chứa cùng bit pattern nhưng kiểu uint32_t
+	holding_regs[2] = (uint16_t)(int_converter.u32 & 0xFFFF);        // Reg 2: LSB
+	holding_regs[3] = (uint16_t)((int_converter.u32 >> 16) & 0xFFFF); // Reg 3: MSB
+	
+	// ===== XỬ LÝ FLOAT (Registers 4-5) =====
+	/*
+	 * float: 3.14159 theo chuẩn IEEE 754 (32-bit)
+	 * Union đảm bảo chuyển đổi đúng từ float sang bit representation
+	 * mà không làm thay đổi giá trị
+	 */
+	union {
+		float f;        // View dưới dạng số thực
+		uint32_t u32;   // View dưới dạng 32-bit unsigned (cùng bit pattern)
+	} float_converter;
+	
+	float_converter.f = demo_float;  // Gán giá trị float
+	// Giờ đây u32 chứa IEEE 754 bit representation
+	holding_regs[4] = (uint16_t)(float_converter.u32 & 0xFFFF);        // Reg 4: LSB
+	holding_regs[5] = (uint16_t)((float_converter.u32 >> 16) & 0xFFFF); // Reg 5: MSB
+	
+	/*
+	 * ===== KẾT QUỢ MONG ĐỢI =====
+	 * Reg 0-1: uint32_t 0x12345678 → [0x5678, 0x1234]
+	 * Reg 2-3: int32_t -123456789  → [0x5DEB, 0xF8A4] (Two's complement)
+	 * Reg 4-5: float 3.14159       → [0x0FDB, 0x4049] (IEEE 754)
+	 * ========================================
+	 */
 }
 void on_write_single_register(uint16_t addr, uint16_t value)
 {
@@ -520,9 +522,6 @@ void modbus_slave_setup(uint8_t slave_id)
 		.on_write_multiple_registers = on_write_multiple_registers};
 	modbus_init_slave(&MODBUS_PORT, &slave_cfg, MODBUS_MODE_RTU);
 	memset(holding_regs, 0, sizeof(holding_regs));
-	// holding_regs[0] = PPR;		  // số xung
-	// holding_regs[1] = (uint16_t)(DIA * 1000); // đường kính (mm)
-	// holding_regs[2] = TIME;		  // thời gian lấy mẫu(ms)
 	MODBUS_SET_DE_RX(); // DE = LOW (RX mode)
 }
 
