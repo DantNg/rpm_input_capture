@@ -59,7 +59,7 @@ int64_t pulse_t = 0;
 float current_speed = 0;
 ////////////////////// Dùng cái này nếu stm32 là MODBUS SLAVE /////////////
 #define SLAVE_ID 0x01
-uint16_t holding_regs[10];
+uint16_t holding_regs[15];
 volatile uint32_t encoder_pulses = 0;
 volatile uint32_t distance_mm = 0;
 int32_t len_val;
@@ -68,6 +68,12 @@ uint8_t current_modbus_slave_id = 0x01;	   // Will be loaded from Flash
 bool modbus_communication_enabled = true;  // Will be loaded from Flash
 bool debug_messages_enabled = true;		   // Will be loaded from Flash
 uint32_t debug_message_interval_ms = 1000; // Will be loaded from Flash
+
+// Variables for Modbus write operations (registers 6-11)
+uint32_t modbus_uint32_value = 0;  // Stored in registers 6-7
+int32_t modbus_int32_value = 0;    // Stored in registers 8-9
+float modbus_float_value = 0.0f;   // Stored in registers 10-11
+
 // MODBUS MASTER timeout management
 typedef enum
 {
@@ -415,12 +421,12 @@ void on_read_holding_registers(uint16_t addr, uint16_t quantity)
 	 * Mỗi kiểu dữ liệu 32-bit được chia thành 2 registers 16-bit
 	 * Sử dụng Little-Endian format (LSB trước) cho tương thích tốt
 	 */
-	
+
 	// ===== DỮ LIỆU DEMO =====
 	uint32_t demo_uint32 = 0x12345678;   // Số dương 32-bit: 305419896
 	int32_t demo_int32 = -123456789;     // Số âm 32-bit: -123456789
 	float demo_float = 3.14159f;         // Số thực: π (pi)
-	
+
 	// ===== XỬ LÝ UINT32_T (Registers 0-1) =====
 	/*
 	 * uint32_t: 0x12345678 = 305419896
@@ -430,7 +436,7 @@ void on_read_holding_registers(uint16_t addr, uint16_t quantity)
 	 */
 	holding_regs[0] = (uint16_t)(demo_uint32 & 0xFFFF);        // Reg 0: 0x5678 (LSB)
 	holding_regs[1] = (uint16_t)((demo_uint32 >> 16) & 0xFFFF); // Reg 1: 0x1234 (MSB)
-	
+
 	// ===== XỬ LÝ INT32_T (Registers 2-3) =====
 	/*
 	 * int32_t: -123456789 trong Two's complement
@@ -442,12 +448,12 @@ void on_read_holding_registers(uint16_t addr, uint16_t quantity)
 		int32_t i32;    // View dưới dạng số nguyên có dấu
 		uint32_t u32;   // View dưới dạng số nguyên không dấu (cùng bit pattern)
 	} int_converter;
-	
+
 	int_converter.i32 = demo_int32;  // Gán giá trị int32_t
 	// Giờ đây u32 chứa cùng bit pattern nhưng kiểu uint32_t
 	holding_regs[2] = (uint16_t)(int_converter.u32 & 0xFFFF);        // Reg 2: LSB
 	holding_regs[3] = (uint16_t)((int_converter.u32 >> 16) & 0xFFFF); // Reg 3: MSB
-	
+
 	// ===== XỬ LÝ FLOAT (Registers 4-5) =====
 	/*
 	 * float: 3.14159 theo chuẩn IEEE 754 (32-bit)
@@ -458,12 +464,12 @@ void on_read_holding_registers(uint16_t addr, uint16_t quantity)
 		float f;        // View dưới dạng số thực
 		uint32_t u32;   // View dưới dạng 32-bit unsigned (cùng bit pattern)
 	} float_converter;
-	
+
 	float_converter.f = demo_float;  // Gán giá trị float
 	// Giờ đây u32 chứa IEEE 754 bit representation
 	holding_regs[4] = (uint16_t)(float_converter.u32 & 0xFFFF);        // Reg 4: LSB
 	holding_regs[5] = (uint16_t)((float_converter.u32 >> 16) & 0xFFFF); // Reg 5: MSB
-	
+
 	/*
 	 * ===== KẾT QUỢ MONG ĐỢI =====
 	 * Reg 0-1: uint32_t 0x12345678 → [0x5678, 0x1234]
@@ -474,24 +480,97 @@ void on_read_holding_registers(uint16_t addr, uint16_t quantity)
 }
 void on_write_single_register(uint16_t addr, uint16_t value)
 {
+	/*
+	 * ========================================
+	 * MODBUS WRITE: Hỗ trợ ghi uint32_t, int32_t, float
+	 * ========================================
+	 * Registers 6-7:  uint32_t (Little-Endian)
+	 * Registers 8-9:  int32_t (Little-Endian)
+	 * Registers 10-11: float (Little-Endian)
+	 */
+
+	static uint16_t temp_regs[12] = {0}; // Temporary storage for multi-register values
+
 	switch (addr)
 	{
-	case 0:
-		holding_regs[0] = value;
-		PPR = value;
-		ProximityCounter_UpdateConfig(&proximity_counter, PPR, DIA);
-		break; // số xung
-	case 1:
-		holding_regs[1] = value;
-		DIA = (float)value / 1000.0;
-		ProximityCounter_UpdateConfig(&proximity_counter, PPR, DIA);
-		break; // đường kính (mm)
-	case 2:
-		holding_regs[2] = value;
-		TIME = value;
-		ProximityCounter_SetTimeout(&proximity_counter, value * 10); // Convert to reasonable timeout
-		break;														 // thời gian lấy mẫu (ms)
+	// ===== UINT32_T VALUE (Registers 6-7) =====
+	case 6: // LSB của uint32_t
+		temp_regs[6] = value;
+		holding_regs[6] = value;
+		// Reconstruct uint32_t từ 2 registers (Little-Endian)
+		modbus_uint32_value = ((uint32_t)temp_regs[7] << 16) | temp_regs[6];
+		break;
+
+	case 7: // MSB của uint32_t
+		temp_regs[7] = value;
+		holding_regs[7] = value;
+		// Reconstruct uint32_t từ 2 registers (Little-Endian)
+		modbus_uint32_value = ((uint32_t)temp_regs[7] << 16) | temp_regs[6];
+		break;
+
+	// ===== INT32_T VALUE (Registers 8-9) =====
+	case 8: // LSB của int32_t
+		temp_regs[8] = value;
+		holding_regs[8] = value;
+		// Reconstruct int32_t từ 2 registers (Little-Endian) với union
+		{
+			union {
+				int32_t i32;
+				uint32_t u32;
+			} int_converter;
+			int_converter.u32 = ((uint32_t)temp_regs[9] << 16) | temp_regs[8];
+			modbus_int32_value = int_converter.i32;
+		}
+		break;
+
+	case 9: // MSB của int32_t
+		temp_regs[9] = value;
+		holding_regs[9] = value;
+		// Reconstruct int32_t từ 2 registers (Little-Endian) với union
+		{
+			union {
+				int32_t i32;
+				uint32_t u32;
+			} int_converter;
+			int_converter.u32 = ((uint32_t)temp_regs[9] << 16) | temp_regs[8];
+			modbus_int32_value = int_converter.i32;
+			printf("📝 Write int32 MSB: 0x%04X, Full value: %ld\r\n", value, (long)modbus_int32_value);
+		}
+		break;
+
+	// ===== FLOAT VALUE (Registers 10-11) =====
+	case 10: // LSB của float
+		temp_regs[10] = value;
+		holding_regs[10] = value;
+		// Reconstruct float từ 2 registers (Little-Endian) với union
+		{
+			union {
+				float f;
+				uint32_t u32;
+			} float_converter;
+			float_converter.u32 = ((uint32_t)temp_regs[11] << 16) | temp_regs[10];
+			modbus_float_value = float_converter.f;
+			printf("📝 Write float LSB: 0x%04X, Full value: %.6f\r\n", value, (double)modbus_float_value);
+		}
+		break;
+
+	case 11: // MSB của float
+		temp_regs[11] = value;
+		holding_regs[11] = value;
+		// Reconstruct float từ 2 registers (Little-Endian) với union
+		{
+			union {
+				float f;
+				uint32_t u32;
+			} float_converter;
+			float_converter.u32 = ((uint32_t)temp_regs[11] << 16) | temp_regs[10];
+			modbus_float_value = float_converter.f;
+			printf("📝 Write float MSB: 0x%04X, Full value: %.6f\r\n", value, (double)modbus_float_value);
+		}
+		break;
+
 	default:
+		holding_regs[addr] = value; // Lưu giá trị vào register tương ứng
 		break;
 	}
 }
@@ -509,7 +588,7 @@ void modbus_slave_setup(uint8_t slave_id)
 		.discrete_inputs = NULL,
 		.discrete_input_count = 0,
 		.holding_registers = holding_regs,
-		.holding_register_count = 10,
+		.holding_register_count = 15,
 		.input_registers = NULL,
 		.input_register_count = 0,
 		.on_read_coils = NULL,
