@@ -491,6 +491,8 @@ void on_write_single_register(uint16_t addr, uint16_t value)
 
 	static uint16_t temp_regs[15] = {0}; // Temporary storage for multi-register values
 
+	printf("📝 Write single register: addr=%d, value=0x%04X (%d)\r\n", addr, value, value);
+
 	switch (addr)
 	{
 	// ===== UINT32_T VALUE (Registers 6-7) =====
@@ -499,6 +501,8 @@ void on_write_single_register(uint16_t addr, uint16_t value)
 		holding_regs[6] = value;
 		// Reconstruct uint32_t từ 2 registers (Little-Endian)
 		modbus_uint32_value = ((uint32_t)temp_regs[7] << 16) | temp_regs[6];
+		printf("    → uint32 LSB written, full value = %lu (0x%08lX)\r\n", 
+			   (unsigned long)modbus_uint32_value, (unsigned long)modbus_uint32_value);
 		break;
 
 	case 7: // MSB của uint32_t
@@ -506,6 +510,8 @@ void on_write_single_register(uint16_t addr, uint16_t value)
 		holding_regs[7] = value;
 		// Reconstruct uint32_t từ 2 registers (Little-Endian)
 		modbus_uint32_value = ((uint32_t)temp_regs[7] << 16) | temp_regs[6];
+		printf("    → uint32 MSB written, full value = %lu (0x%08lX)\r\n", 
+			   (unsigned long)modbus_uint32_value, (unsigned long)modbus_uint32_value);
 		break;
 
 	// ===== INT32_T VALUE (Registers 8-9) =====
@@ -520,6 +526,8 @@ void on_write_single_register(uint16_t addr, uint16_t value)
 			} int_converter;
 			int_converter.u32 = ((uint32_t)temp_regs[9] << 16) | temp_regs[8];
 			modbus_int32_value = int_converter.i32;
+			printf("    → int32 LSB written, full value = %ld (0x%08lX)\r\n", 
+				   (long)modbus_int32_value, (unsigned long)int_converter.u32);
 		}
 		break;
 
@@ -534,6 +542,8 @@ void on_write_single_register(uint16_t addr, uint16_t value)
 			} int_converter;
 			int_converter.u32 = ((uint32_t)temp_regs[9] << 16) | temp_regs[8];
 			modbus_int32_value = int_converter.i32;
+			printf("    → int32 MSB written, full value = %ld (0x%08lX)\r\n", 
+				   (long)modbus_int32_value, (unsigned long)int_converter.u32);
 		}
 		break;
 
@@ -549,6 +559,8 @@ void on_write_single_register(uint16_t addr, uint16_t value)
 			} float_converter;
 			float_converter.u32 = ((uint32_t)temp_regs[11] << 16) | temp_regs[10];
 			modbus_float_value = float_converter.f;
+			printf("    → float LSB written, full value = %.6f (0x%08lX)\r\n", 
+				   (double)modbus_float_value, (unsigned long)float_converter.u32);
 		}
 		break;
 
@@ -563,18 +575,100 @@ void on_write_single_register(uint16_t addr, uint16_t value)
 			} float_converter;
 			float_converter.u32 = ((uint32_t)temp_regs[11] << 16) | temp_regs[10];
 			modbus_float_value = float_converter.f;
+			printf("    → float MSB written, full value = %.6f (0x%08lX)\r\n", 
+				   (double)modbus_float_value, (unsigned long)float_converter.u32);
 		}
 		break;
 
 	default:
 		holding_regs[addr] = value; // Lưu giá trị vào register tương ứng
+		printf("    → Standard register[%d] = 0x%04X (%d)\r\n", addr, value, value);
 		break;
 	}
 }
 void on_write_multiple_registers(uint16_t addr, const uint16_t *values,
 								 uint16_t quantity)
 {
-	printf("Master write multi registers!\n");
+	/*
+	 * ========================================
+	 * MODBUS WRITE MULTIPLE: Hỗ trợ ghi nhiều registers cùng lúc
+	 * ========================================
+	 * Xử lý tương tự như write single nhưng cho nhiều registers
+	 * Registers 6-7:  uint32_t (Little-Endian)
+	 * Registers 8-9:  int32_t (Little-Endian) 
+	 * Registers 10-11: float (Little-Endian)
+	 */
+	
+	static uint16_t temp_regs[15] = {0}; // Temporary storage for multi-register values
+	
+	printf("📝 Write multiple registers: addr=%d, quantity=%d\r\n", addr, quantity);
+	
+	// Process each register in the range
+	for (uint16_t i = 0; i < quantity; i++)
+	{
+		uint16_t current_addr = addr + i;
+		uint16_t value = values[i];
+		
+		// Store value in holding registers
+		if (current_addr < 15) // Ensure we don't exceed array bounds
+		{
+			holding_regs[current_addr] = value;
+			temp_regs[current_addr] = value;
+		}
+		
+		printf("  Reg[%d] = 0x%04X (%d)\r\n", current_addr, value, value);
+		
+		// Apply the same logic as write single register
+		switch (current_addr)
+		{
+		// ===== UINT32_T VALUE (Registers 6-7) =====
+		case 6: // LSB của uint32_t
+		case 7: // MSB của uint32_t
+			// Reconstruct uint32_t từ 2 registers (Little-Endian)
+			modbus_uint32_value = ((uint32_t)temp_regs[7] << 16) | temp_regs[6];
+			printf("    → uint32_value = %lu (0x%08lX)\r\n", 
+				   (unsigned long)modbus_uint32_value, (unsigned long)modbus_uint32_value);
+			break;
+			
+		// ===== INT32_T VALUE (Registers 8-9) =====
+		case 8: // LSB của int32_t  
+		case 9: // MSB của int32_t
+			// Reconstruct int32_t từ 2 registers (Little-Endian) với union
+			{
+				union {
+					int32_t i32;
+					uint32_t u32;
+				} int_converter;
+				int_converter.u32 = ((uint32_t)temp_regs[9] << 16) | temp_regs[8];
+				modbus_int32_value = int_converter.i32;
+				printf("    → int32_value = %ld (0x%08lX)\r\n", 
+					   (long)modbus_int32_value, (unsigned long)int_converter.u32);
+			}
+			break;
+			
+		// ===== FLOAT VALUE (Registers 10-11) =====
+		case 10: // LSB của float
+		case 11: // MSB của float
+			// Reconstruct float từ 2 registers (Little-Endian) với union
+			{
+				union {
+					float f;
+					uint32_t u32;
+				} float_converter;
+				float_converter.u32 = ((uint32_t)temp_regs[11] << 16) | temp_regs[10];
+				modbus_float_value = float_converter.f;
+				printf("    → float_value = %.6f (0x%08lX)\r\n", 
+					   (double)modbus_float_value, (unsigned long)float_converter.u32);
+			}
+			break;
+			
+		default:
+			// Other registers - just store the value
+			break;
+		}
+	}
+	
+	printf("✅ Write multiple registers completed\r\n");
 }
 void modbus_slave_setup(uint8_t slave_id)
 {
