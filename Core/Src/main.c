@@ -489,7 +489,7 @@ void on_write_single_register(uint16_t addr, uint16_t value)
 	 * Registers 10-11: float (Little-Endian)
 	 */
 
-	static uint16_t temp_regs[12] = {0}; // Temporary storage for multi-register values
+	static uint16_t temp_regs[15] = {0}; // Temporary storage for multi-register values
 
 	switch (addr)
 	{
@@ -534,7 +534,6 @@ void on_write_single_register(uint16_t addr, uint16_t value)
 			} int_converter;
 			int_converter.u32 = ((uint32_t)temp_regs[9] << 16) | temp_regs[8];
 			modbus_int32_value = int_converter.i32;
-			printf("📝 Write int32 MSB: 0x%04X, Full value: %ld\r\n", value, (long)modbus_int32_value);
 		}
 		break;
 
@@ -550,7 +549,6 @@ void on_write_single_register(uint16_t addr, uint16_t value)
 			} float_converter;
 			float_converter.u32 = ((uint32_t)temp_regs[11] << 16) | temp_regs[10];
 			modbus_float_value = float_converter.f;
-			printf("📝 Write float LSB: 0x%04X, Full value: %.6f\r\n", value, (double)modbus_float_value);
 		}
 		break;
 
@@ -565,7 +563,6 @@ void on_write_single_register(uint16_t addr, uint16_t value)
 			} float_converter;
 			float_converter.u32 = ((uint32_t)temp_regs[11] << 16) | temp_regs[10];
 			modbus_float_value = float_converter.f;
-			printf("📝 Write float MSB: 0x%04X, Full value: %.6f\r\n", value, (double)modbus_float_value);
 		}
 		break;
 
