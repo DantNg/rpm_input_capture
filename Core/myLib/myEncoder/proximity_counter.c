@@ -99,6 +99,9 @@ void ProximityCounter_Init(ProximityCounter_t *prox_counter,
     prox_counter->averaging_samples = config->averaging_samples > 0 ? config->averaging_samples : 3;
     prox_counter->speed_unit = PROXIMITY_SPEED_UNIT_RPM; // Default to RPM
     
+    // Default measurement mode: averaging
+    prox_counter->measurement_mode = PROXIMITY_MEASURE_AVERAGING;
+    
     // Set timer handle
     prox_counter->htim = htim;
     
@@ -311,6 +314,14 @@ void ProximityCounter_HandleCapture(ProximityCounter_t *prox_counter, TIM_Handle
                 // First measurement: use single period
                 prox_counter->new_capture_ready = 1;
                 prox_counter->first_measurement = 0;
+            } else if (prox_counter->measurement_mode == PROXIMITY_MEASURE_SINGLE_PERIOD) {
+                /* Single period mode: update RPM every single period.
+                 * Suitable for very slow conveyors where averaging would cause
+                 * excessive response delay. Hysteresis filter still applies. */
+                prox_counter->new_capture_ready = 1;
+                // Keep period_sum/count reset so switching back to averaging starts fresh
+                prox_counter->period_sum = 0;
+                prox_counter->period_count = 0;
             } else {
                 // Subsequent measurements: collect periods for averaging
                 prox_counter->period_sum += prox_counter->difference;
@@ -382,6 +393,34 @@ ProximitySpeedUnit_t ProximityCounter_GetSpeedUnit(const ProximityCounter_t *pro
         return PROXIMITY_SPEED_UNIT_RPM;
     }
     return prox_counter->speed_unit;
+}
+
+/**
+ * @brief Set measurement mode (averaging or single period)
+ * @note Single period mode: calculate RPM from every single captured period.
+ *       Useful for very slow conveyors where averaging N periods would cause
+ *       large response delay. Hysteresis filter still applies.
+ *       Averaging mode: collect N periods then compute average (default).
+ */
+void ProximityCounter_SetMeasurementMode(ProximityCounter_t *prox_counter, ProximityMeasurementMode_t mode) {
+    if (!prox_counter) {
+        return;
+    }
+    prox_counter->measurement_mode = mode;
+    // Reset averaging state so the mode change takes effect immediately
+    prox_counter->period_sum = 0;
+    prox_counter->period_count = 0;
+    prox_counter->first_measurement = 1;
+}
+
+/**
+ * @brief Get current measurement mode
+ */
+ProximityMeasurementMode_t ProximityCounter_GetMeasurementMode(const ProximityCounter_t *prox_counter) {
+    if (!prox_counter) {
+        return PROXIMITY_MEASURE_AVERAGING;
+    }
+    return prox_counter->measurement_mode;
 }
 
 /**

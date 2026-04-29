@@ -157,6 +157,21 @@ void SetProximitySpeedUnit(int unit)
 	}
 }
 
+void SetProximityMeasurementMode(int mode)
+{
+	if (mode == 0)
+	{
+		ProximityCounter_SetMeasurementMode(&proximity_counter, PROXIMITY_MEASURE_AVERAGING);
+		printf("✅ Measurement mode: AVERAGING (%lu samples)\r\n",
+			   (unsigned long)proximity_counter.averaging_samples);
+	}
+	else if (mode == 1)
+	{
+		ProximityCounter_SetMeasurementMode(&proximity_counter, PROXIMITY_MEASURE_SINGLE_PERIOD);
+		printf("✅ Measurement mode: SINGLE PERIOD (for slow conveyors)\r\n");
+	}
+}
+
 void SetProximityHysteresis(int index, int rpm_threshold, int hysteresis)
 {
 	if (index >= 0 && index < 10)

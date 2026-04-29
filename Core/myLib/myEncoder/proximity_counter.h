@@ -33,6 +33,16 @@ typedef enum {
     PROXIMITY_SPEED_UNIT_M_MIN = 1  // Meters per minute
 } ProximitySpeedUnit_t;
 
+/**
+ * @brief Measurement mode for proximity counter
+ * AVERAGING: collect N periods then average (default, good for normal/fast conveyors)
+ * SINGLE_PERIOD: update RPM every single period (good for very slow conveyors)
+ */
+typedef enum {
+    PROXIMITY_MEASURE_AVERAGING = 0,     // Multi-period averaging (default)
+    PROXIMITY_MEASURE_SINGLE_PERIOD = 1  // Single period for slow conveyors
+} ProximityMeasurementMode_t;
+
 typedef struct {
     uint16_t rpm_threshold;  // RPM threshold for this entry
     uint16_t hysteresis;     // Hysteresis value for this threshold
@@ -67,6 +77,9 @@ typedef struct {
     // Hysteresis filter variables
     volatile int rpm_previous;
     volatile uint8_t stability_counter;
+    
+    // Measurement mode: averaging or single period
+    ProximityMeasurementMode_t measurement_mode;
     
     // Timer handle pointer
     TIM_HandleTypeDef *htim;
@@ -186,6 +199,21 @@ void ProximityCounter_SetSpeedUnit(ProximityCounter_t *prox_counter, ProximitySp
  * @retval Current speed unit
  */
 ProximitySpeedUnit_t ProximityCounter_GetSpeedUnit(const ProximityCounter_t *prox_counter);
+
+/**
+ * @brief Set measurement mode (averaging or single period)
+ * @param prox_counter: Pointer to ProximityCounter_t structure
+ * @param mode: PROXIMITY_MEASURE_AVERAGING or PROXIMITY_MEASURE_SINGLE_PERIOD
+ * @retval None
+ */
+void ProximityCounter_SetMeasurementMode(ProximityCounter_t *prox_counter, ProximityMeasurementMode_t mode);
+
+/**
+ * @brief Get current measurement mode
+ * @param prox_counter: Pointer to ProximityCounter_t structure
+ * @retval Current measurement mode
+ */
+ProximityMeasurementMode_t ProximityCounter_GetMeasurementMode(const ProximityCounter_t *prox_counter);
 
 /**
  * @brief Set hysteresis threshold entry
