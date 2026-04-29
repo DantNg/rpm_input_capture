@@ -157,14 +157,23 @@ void ProximityCounter_ProcessCapture(ProximityCounter_t *prox_counter) {
         float frequency = (float)PROXIMITY_COUNTER_HZ / (float)prox_counter->difference;
         int rpm_raw = (int)(frequency * 60.0f / prox_counter->ppr);  // Account for PPR
         
-        // Apply adaptive hysteresis filter
-        prox_counter->rpm = (float)ProximityCounter_ApplyHysteresisFilter(
-            prox_counter,
-            rpm_raw, 
-            prox_counter->rpm_previous, 
-            &prox_counter->stability_counter
-        );
-        prox_counter->rpm_previous = (int)prox_counter->rpm;
+        if (prox_counter->measurement_mode == PROXIMITY_MEASURE_SINGLE_PERIOD) {
+            /* Single period mode: bypass hysteresis filter để cập nhật RPM ngay lập tức
+             * mỗi chu kỳ. Hysteresis không phù hợp vì băng chuyền rất chậm — RPM nhỏ,
+             * threshold sẽ chặn hầu hết các update. */
+            prox_counter->rpm = (float)rpm_raw;
+            prox_counter->rpm_previous = rpm_raw;
+            prox_counter->stability_counter = 0;
+        } else {
+            // Averaging mode: apply adaptive hysteresis filter
+            prox_counter->rpm = (float)ProximityCounter_ApplyHysteresisFilter(
+                prox_counter,
+                rpm_raw, 
+                prox_counter->rpm_previous, 
+                &prox_counter->stability_counter
+            );
+            prox_counter->rpm_previous = (int)prox_counter->rpm;
+        }
     }
 }
 
