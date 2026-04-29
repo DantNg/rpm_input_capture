@@ -310,20 +310,21 @@ void ProximityCounter_HandleCapture(ProximityCounter_t *prox_counter, TIM_Handle
             prox_counter->difference = (prox_counter->overflow_count * 65536UL) + 
                                       prox_counter->ic_val2 - prox_counter->ic_val1;
             
-            if (prox_counter->first_measurement) {
-                // First measurement: use single period
+            if (prox_counter->measurement_mode == PROXIMITY_MEASURE_SINGLE_PERIOD) {
+                /* Single period mode: tính RPM ngay từ khoảng cách giữa 2 xung liên tiếp.
+                 * Không cần warmup - bắt đầu tính từ ngay cặp xung đầu tiên (pulse 1 → pulse 2).
+                 * Phù hợp băng chuyền rất chậm, tránh delay do averaging. */
                 prox_counter->new_capture_ready = 1;
-                prox_counter->first_measurement = 0;
-            } else if (prox_counter->measurement_mode == PROXIMITY_MEASURE_SINGLE_PERIOD) {
-                /* Single period mode: update RPM every single period.
-                 * Suitable for very slow conveyors where averaging would cause
-                 * excessive response delay. Hysteresis filter still applies. */
-                prox_counter->new_capture_ready = 1;
-                // Keep period_sum/count reset so switching back to averaging starts fresh
+                prox_counter->first_measurement = 0;  // Reset để khi switch sang averaging sẽ warmup lại
                 prox_counter->period_sum = 0;
                 prox_counter->period_count = 0;
+            } else if (prox_counter->first_measurement) {
+                /* Averaging mode - warmup: dùng 1 chu kỳ đầu tiên để khởi động,
+                 * sau đó chuyển sang averaging từ lần capture tiếp theo. */
+                prox_counter->new_capture_ready = 1;
+                prox_counter->first_measurement = 0;
             } else {
-                // Subsequent measurements: collect periods for averaging
+                // Averaging mode: gom đủ N chu kỳ rồi lấy trung bình
                 prox_counter->period_sum += prox_counter->difference;
                 prox_counter->period_count++;
                 
