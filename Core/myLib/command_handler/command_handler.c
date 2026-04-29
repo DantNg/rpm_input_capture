@@ -38,6 +38,7 @@ extern void ShowProximityHysteresis(void);
 extern void ClearProximityHysteresis(void);
 extern void SaveProximityHysteresis(void);
 extern void LoadProximityHysteresis(void);
+extern void SetProximityMeasurementMode(int mode);  // 0=averaging, 1=single_period
 
 void CommandHandler_Init(CommandHandler_t *handler, CommandHandler_Config_t *config) {
     if (!handler || !config) return;
@@ -110,6 +111,11 @@ void CommandHandler_Process(CommandHandler_t *handler) {
                     }
                     // Proximity status command
                     else if (strcmp(handler->cmd_buffer, "proximity_setting") == 0) {
+                        Process_ProximityCommands(handler, handler->cmd_buffer);
+                        command_found = true;
+                    }
+                    // Proximity measurement mode command
+                    else if (strncmp(handler->cmd_buffer, "prox_mode", 9) == 0) {
                         Process_ProximityCommands(handler, handler->cmd_buffer);
                         command_found = true;
                     }
@@ -1090,6 +1096,10 @@ static void Show_Help(void) {
     printf("  hyst save/load   - Save/Load to Flash\r\n");
     printf("PROXIMITY STATUS:\r\n");
     printf("  proximity_setting - Show proximity counter configuration\r\n");
+    printf("PROXIMITY MEASUREMENT MODE:\r\n");
+    printf("  prox_mode            - Show current measurement mode\r\n");
+    printf("  prox_mode single     - Single period per update (very slow conveyors)\r\n");
+    printf("  prox_mode averaging  - Multi-period averaging (normal/fast conveyors)\r\n");
 }
 
 /**
@@ -1107,6 +1117,24 @@ static void Process_ProximityCommands(CommandHandler_t *handler, const char* cmd
                (unsigned long)*handler->config.timeout);
       
         
+    } else if (strcmp(cmd, "prox_mode") == 0) {
+        extern ProximityCounter_t proximity_counter;
+        printf("=== PROXIMITY MEASUREMENT MODE ===\r\n");
+        if (proximity_counter.measurement_mode == PROXIMITY_MEASURE_SINGLE_PERIOD) {
+            printf("Mode: SINGLE PERIOD (for very slow conveyors)\r\n");
+            printf("RPM is updated after every single pulse period.\r\n");
+        } else {
+            printf("Mode: AVERAGING (%lu samples per update)\r\n",
+                   (unsigned long)proximity_counter.averaging_samples);
+            printf("RPM is updated after collecting N periods.\r\n");
+        }
+        printf("Use 'prox_mode single' or 'prox_mode averaging' to switch.\r\n");
+        
+    } else if (strcmp(cmd, "prox_mode single") == 0) {
+        SetProximityMeasurementMode(1);
+        
+    } else if (strcmp(cmd, "prox_mode averaging") == 0) {
+        SetProximityMeasurementMode(0);
     } else if (strncmp(cmd, "hyst set ", 9) == 0) {
         // Parse: hyst set <index> <rpm_threshold> <hysteresis>
         const char* params = cmd + 9;

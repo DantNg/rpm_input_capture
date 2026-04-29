@@ -99,6 +99,9 @@ void ProximityCounter_Init(ProximityCounter_t *prox_counter,
     prox_counter->averaging_samples = config->averaging_samples > 0 ? config->averaging_samples : 3;
     prox_counter->speed_unit = PROXIMITY_SPEED_UNIT_RPM; // Default to RPM
     
+    // Default measurement mode: single period (for slow conveyors)
+    prox_counter->measurement_mode = PROXIMITY_MEASURE_SINGLE_PERIOD;
+    
     // Set timer handle
     prox_counter->htim = htim;
     
@@ -154,14 +157,23 @@ void ProximityCounter_ProcessCapture(ProximityCounter_t *prox_counter) {
         float frequency = (float)PROXIMITY_COUNTER_HZ / (float)prox_counter->difference;
         int rpm_raw = (int)(frequency * 60.0f / prox_counter->ppr);  // Account for PPR
         
-        // Apply adaptive hysteresis filter
-        prox_counter->rpm = (float)ProximityCounter_ApplyHysteresisFilter(
-            prox_counter,
-            rpm_raw, 
-            prox_counter->rpm_previous, 
-            &prox_counter->stability_counter
-        );
-        prox_counter->rpm_previous = (int)prox_counter->rpm;
+        if (prox_counter->measurement_mode == PROXIMITY_MEASURE_SINGLE_PERIOD) {
+            /* Single period mode: bypass hysteresis filter, cập nhật RPM ngay lập tức
+             * Hysteresis không phù hợp cho băng chuyền chậm — RPM nhỏ,
+             * threshold sẽ chặn hầu hết các update. */
+            prox_counter->rpm = (float)rpm_raw;
+            prox_counter->rpm_previous = rpm_raw;
+            prox_counter->stability_counter = 0;
+        } else {
+            // Averaging mode: apply adaptive hysteresis filter
+            prox_counter->rpm = (float)ProximityCounter_ApplyHysteresisFilter(
+                prox_counter,
+                rpm_raw, 
+                prox_counter->rpm_previous, 
+                &prox_counter->stability_counter
+            );
+            prox_counter->rpm_previous = (int)prox_counter->rpm;
+        }
     }
 }
 
@@ -307,23 +319,31 @@ void ProximityCounter_HandleCapture(ProximityCounter_t *prox_counter, TIM_Handle
             prox_counter->difference = (prox_counter->overflow_count * 65536UL) + 
                                       prox_counter->ic_val2 - prox_counter->ic_val1;
             
-            if (prox_counter->first_measurement) {
-                // First measurement: use single period
+            if (prox_counter->measurement_mode == PROXIMITY_MEASURE_SINGLE_PERIOD) {
+                /* Single period mode: mỗi xung là 1 lần đo luôn, không gom.
+                 * Lưu period và báo main loop tính RPM. */
                 prox_counter->new_capture_ready = 1;
                 prox_counter->first_measurement = 0;
             } else {
-                // Subsequent measurements: collect periods for averaging
-                prox_counter->period_sum += prox_counter->difference;
-                prox_counter->period_count++;
-                
-                if (prox_counter->period_count >= prox_counter->averaging_samples) {
-                    // Calculate average period
-                    prox_counter->difference = prox_counter->period_sum / prox_counter->period_count;
+                /* Averaging mode: gom N chu kỳ rồi mới báo main loop. */
+                if (prox_counter->first_measurement) {
+                    // First measurement: use single period as warmup
                     prox_counter->new_capture_ready = 1;
+                    prox_counter->first_measurement = 0;
+                } else {
+                    // Subsequent measurements: collect periods for averaging
+                    prox_counter->period_sum += prox_counter->difference;
+                    prox_counter->period_count++;
                     
-                    // Reset for next averaging cycle
-                    prox_counter->period_sum = 0;
-                    prox_counter->period_count = 0;
+                    if (prox_counter->period_count >= prox_counter->averaging_samples) {
+                        // Calculate average period
+                        prox_counter->difference = prox_counter->period_sum / prox_counter->period_count;
+                        prox_counter->new_capture_ready = 1;
+                        
+                        // Reset for next averaging cycle
+                        prox_counter->period_sum = 0;
+                        prox_counter->period_count = 0;
+                    }
                 }
             }
             
@@ -446,4 +466,28 @@ void ProximityCounter_InitDefaultHysteresis(ProximityCounter_t *prox_counter) {
     prox_counter->hysteresis_table[4] = (ProximityHysteresisEntry_t){1100, 50}; // >= 1100 RPM: threshold 50
     
     prox_counter->hysteresis_table_size = 5;
+}
+
+/**
+ * @brief Set measurement mode (averaging or single period)
+ */
+void ProximityCounter_SetMeasurementMode(ProximityCounter_t *prox_counter, ProximityMeasurementMode_t mode) {
+    if (!prox_counter) {
+        return;
+    }
+    prox_counter->measurement_mode = mode;
+    // Reset averaging state so the mode change takes effect immediately
+    prox_counter->period_sum = 0;
+    prox_counter->period_count = 0;
+    prox_counter->first_measurement = 1;
+}
+
+/**
+ * @brief Get current measurement mode
+ */
+ProximityMeasurementMode_t ProximityCounter_GetMeasurementMode(const ProximityCounter_t *prox_counter) {
+    if (!prox_counter) {
+        return PROXIMITY_MEASURE_SINGLE_PERIOD;
+    }
+    return prox_counter->measurement_mode;
 }
