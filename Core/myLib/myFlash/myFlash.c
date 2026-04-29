@@ -228,3 +228,13 @@ void myFlash_LoadDebugConfig(myDebugConfig *out)
     out->enabled = (uint8_t)((data >> 16) & 0xFF);
     out->interval = (uint16_t)(data & 0xFFFF);
 }
+
+HAL_StatusTypeDef myFlash_SaveProxMode(uint32_t mode)
+{
+    return NVS_WriteWords(MYFLASH_PAGE_PROX_MODE, &mode, 1U);
+}
+
+uint32_t myFlash_LoadProxMode(void)
+{
+    return NVS_ReadWord(MYFLASH_PAGE_PROX_MODE);
+}
