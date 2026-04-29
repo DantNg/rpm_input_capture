@@ -99,8 +99,8 @@ void ProximityCounter_Init(ProximityCounter_t *prox_counter,
     prox_counter->averaging_samples = config->averaging_samples > 0 ? config->averaging_samples : 3;
     prox_counter->speed_unit = PROXIMITY_SPEED_UNIT_RPM; // Default to RPM
     
-    // Default measurement mode: averaging
-    prox_counter->measurement_mode = PROXIMITY_MEASURE_AVERAGING;
+    // Default measurement mode: single period (for slow conveyors)
+    prox_counter->measurement_mode = PROXIMITY_MEASURE_SINGLE_PERIOD;
     
     // Set timer handle
     prox_counter->htim = htim;
