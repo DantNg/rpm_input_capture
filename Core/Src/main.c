@@ -162,12 +162,14 @@ void SetProximityMeasurementMode(int mode)
 	if (mode == 0)
 	{
 		ProximityCounter_SetMeasurementMode(&proximity_counter, PROXIMITY_MEASURE_AVERAGING);
+		myFlash_SaveProxMode(0);
 		printf("✅ Measurement mode: AVERAGING (%lu samples)\r\n",
 			   (unsigned long)proximity_counter.averaging_samples);
 	}
 	else if (mode == 1)
 	{
 		ProximityCounter_SetMeasurementMode(&proximity_counter, PROXIMITY_MEASURE_SINGLE_PERIOD);
+		myFlash_SaveProxMode(1);
 		printf("✅ Measurement mode: SINGLE PERIOD (for slow conveyors)\r\n");
 	}
 }
@@ -632,6 +634,25 @@ int main(void)
 
 	// Load Hysteresis table from Flash
 	LoadProximityHysteresis();
+
+	// Load proximity measurement mode from Flash
+	{
+		uint32_t saved_prox_mode = myFlash_LoadProxMode();
+		if (saved_prox_mode == 0xFFFFFFFFU || saved_prox_mode > 1U)
+		{
+			// Chưa lưu bao giờ → dùng default SINGLE_PERIOD
+			ProximityCounter_SetMeasurementMode(&proximity_counter, PROXIMITY_MEASURE_SINGLE_PERIOD);
+			myFlash_SaveProxMode(1);
+			printf("⚙️ Initialized prox_mode to SINGLE PERIOD and saved to Flash\r\n");
+		}
+		else
+		{
+			ProximityCounter_SetMeasurementMode(&proximity_counter,
+				(saved_prox_mode == 0) ? PROXIMITY_MEASURE_AVERAGING : PROXIMITY_MEASURE_SINGLE_PERIOD);
+			printf("⬇️ Loaded prox_mode from Flash: %s\r\n",
+				(saved_prox_mode == 0) ? "AVERAGING" : "SINGLE PERIOD");
+		}
+	}
 
 	// Initialize Command Handler
 	CommandHandler_Config_t cmd_config = {

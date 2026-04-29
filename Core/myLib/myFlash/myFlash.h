@@ -15,6 +15,7 @@
 #define MYFLASH_PAGE_HYSTERESIS 	0x0801E400U  // hysteresis table
 #define MYFLASH_PAGE_MODBUS_UART 	0x0801E000U  // Modbus UART configuration (page-aligned)
 #define MYFLASH_PAGE_DEBUG 			0x0801DC00U  // debug data
+#define MYFLASH_PAGE_PROX_MODE 		0x0801D800U  // proximity measurement mode (single/averaging)
 // === Data structures ===
 typedef struct {
 	uint32_t baudRate;        // e.g., 9600, 115200
@@ -90,6 +91,9 @@ void               myFlash_LoadHysteresisTable(myHysteresisTable *out);
 
 HAL_StatusTypeDef myFlash_SaveDebugConfig(const myDebugConfig *log);
 void               myFlash_LoadDebugConfig(myDebugConfig *out);
+
+HAL_StatusTypeDef myFlash_SaveProxMode(uint32_t mode);
+uint32_t           myFlash_LoadProxMode(void);
 // === Low-level backward-compatible aliases ===
 #define myFlash_Write(addr, data)      NVS_WriteWord((addr), (data))
 #define myFlash_Read(addr)             NVS_ReadWord((addr))
