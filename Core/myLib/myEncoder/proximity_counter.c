@@ -296,46 +296,32 @@ void ProximityCounter_HandleCapture(ProximityCounter_t *prox_counter, TIM_Handle
     }
     
     if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
-        /* Read current timer capture value (equivalent to micros() in Arduino) */
         uint32_t current_val = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
         
         if (prox_counter->is_first_captured == 0) {
-            /* First pulse ever: store anchor, no period available yet.
-             * Equivalent to: lastTime = micros() on the very first ISR call. */
+            /* Pulse 1: chỉ lưu anchor (lastTime = t), chưa có period. */
             prox_counter->ic_val1 = current_val;
             prox_counter->is_first_captured = 1;
             prox_counter->overflow_count = 0;
             prox_counter->last_capture_time = HAL_GetTick();
         } else {
-            /* Subsequent pulses: period = current - last (with overflow correction).
-             * Equivalent to: revolutionTime = t - lastTime; lastTime = t; */
+            /* Pulse 2 trở đi: tính period = current - lastTime, rồi lastTime = current.
+             * ISR chỉ lưu period và set flag — không tính RPM ở đây.
+             * Tương đương: revolutionTime = t - lastTime; lastTime = t; */
             uint32_t period = (prox_counter->overflow_count * 65536UL) +
                               current_val - prox_counter->ic_val1;
             
             if (prox_counter->measurement_mode == PROXIMITY_MEASURE_SINGLE_PERIOD) {
-                /* Single period mode - giống hệt pseudocode Arduino:
-                 *   rpm = 60_000_000 / revolutionTime (microseconds)
-                 * Ở đây timer chạy 1MHz (72MHz/72), period = số microseconds.
-                 * Công thức: RPM = (TIMER_HZ / period) * 60 / PPR */
-                if (period > 0) {
-                    float frequency = (float)PROXIMITY_COUNTER_HZ / (float)period;
-                    int rpm_raw = (int)(frequency * 60.0f / (float)prox_counter->ppr);
-                    /* Áp dụng hysteresis filter rồi lưu thẳng vào rpm */
-                    prox_counter->rpm = (float)ProximityCounter_ApplyHysteresisFilter(
-                        prox_counter,
-                        rpm_raw,
-                        prox_counter->rpm_previous,
-                        &prox_counter->stability_counter
-                    );
-                    prox_counter->rpm_previous = (int)prox_counter->rpm;
-                }
-                /* Không dùng new_capture_ready - RPM đã được cập nhật trực tiếp */
-            } else {
-                /* Averaging mode: gom đủ N chu kỳ rồi xử lý ở main loop */
+                /* Single period mode: mỗi xung là 1 lần đo luôn, không gom.
+                 * Lưu period và báo main loop tính RPM. */
                 prox_counter->difference = period;
-                
+                prox_counter->new_capture_ready = 1;
+                prox_counter->first_measurement = 0;
+            } else {
+                /* Averaging mode: gom N chu kỳ rồi mới báo main loop. */
                 if (prox_counter->first_measurement) {
-                    /* Warmup: dùng chu kỳ đầu tiên để khởi động */
+                    /* Warmup: dùng chu kỳ đầu tiên để khởi động trước khi averaging. */
+                    prox_counter->difference = period;
                     prox_counter->new_capture_ready = 1;
                     prox_counter->first_measurement = 0;
                 } else {
@@ -351,7 +337,7 @@ void ProximityCounter_HandleCapture(ProximityCounter_t *prox_counter, TIM_Handle
                 }
             }
             
-            /* Cập nhật anchor: lastTime = t (dùng cho chu kỳ tiếp theo) */
+            /* Cập nhật anchor: lastTime = t */
             prox_counter->ic_val1 = current_val;
             prox_counter->overflow_count = 0;
             prox_counter->last_capture_time = HAL_GetTick();
