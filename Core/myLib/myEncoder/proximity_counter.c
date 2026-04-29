@@ -296,52 +296,65 @@ void ProximityCounter_HandleCapture(ProximityCounter_t *prox_counter, TIM_Handle
     }
     
     if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
+        /* Read current timer capture value (equivalent to micros() in Arduino) */
+        uint32_t current_val = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+        
         if (prox_counter->is_first_captured == 0) {
-            // First rising edge - store initial value
-            prox_counter->ic_val1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+            /* First pulse ever: store anchor, no period available yet.
+             * Equivalent to: lastTime = micros() on the very first ISR call. */
+            prox_counter->ic_val1 = current_val;
             prox_counter->is_first_captured = 1;
             prox_counter->overflow_count = 0;
             prox_counter->last_capture_time = HAL_GetTick();
         } else {
-            // Second rising edge - calculate period
-            prox_counter->ic_val2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
-            
-            // Calculate difference accounting for overflows
-            prox_counter->difference = (prox_counter->overflow_count * 65536UL) + 
-                                      prox_counter->ic_val2 - prox_counter->ic_val1;
+            /* Subsequent pulses: period = current - last (with overflow correction).
+             * Equivalent to: revolutionTime = t - lastTime; lastTime = t; */
+            uint32_t period = (prox_counter->overflow_count * 65536UL) +
+                              current_val - prox_counter->ic_val1;
             
             if (prox_counter->measurement_mode == PROXIMITY_MEASURE_SINGLE_PERIOD) {
-                /* Single period mode: tính RPM ngay từ khoảng cách giữa 2 xung liên tiếp.
-                 * Không cần warmup - bắt đầu tính từ ngay cặp xung đầu tiên (pulse 1 → pulse 2).
-                 * Phù hợp băng chuyền rất chậm, tránh delay do averaging. */
-                prox_counter->new_capture_ready = 1;
-                prox_counter->first_measurement = 0;  // Reset để khi switch sang averaging sẽ warmup lại
-                prox_counter->period_sum = 0;
-                prox_counter->period_count = 0;
-            } else if (prox_counter->first_measurement) {
-                /* Averaging mode - warmup: dùng 1 chu kỳ đầu tiên để khởi động,
-                 * sau đó chuyển sang averaging từ lần capture tiếp theo. */
-                prox_counter->new_capture_ready = 1;
-                prox_counter->first_measurement = 0;
+                /* Single period mode - giống hệt pseudocode Arduino:
+                 *   rpm = 60_000_000 / revolutionTime (microseconds)
+                 * Ở đây timer chạy 1MHz (72MHz/72), period = số microseconds.
+                 * Công thức: RPM = (TIMER_HZ / period) * 60 / PPR */
+                if (period > 0) {
+                    float frequency = (float)PROXIMITY_COUNTER_HZ / (float)period;
+                    int rpm_raw = (int)(frequency * 60.0f / (float)prox_counter->ppr);
+                    /* Áp dụng hysteresis filter rồi lưu thẳng vào rpm */
+                    prox_counter->rpm = (float)ProximityCounter_ApplyHysteresisFilter(
+                        prox_counter,
+                        rpm_raw,
+                        prox_counter->rpm_previous,
+                        &prox_counter->stability_counter
+                    );
+                    prox_counter->rpm_previous = (int)prox_counter->rpm;
+                }
+                /* Không dùng new_capture_ready - RPM đã được cập nhật trực tiếp */
             } else {
-                // Averaging mode: gom đủ N chu kỳ rồi lấy trung bình
-                prox_counter->period_sum += prox_counter->difference;
-                prox_counter->period_count++;
+                /* Averaging mode: gom đủ N chu kỳ rồi xử lý ở main loop */
+                prox_counter->difference = period;
                 
-                if (prox_counter->period_count >= prox_counter->averaging_samples) {
-                    // Calculate average period
-                    prox_counter->difference = prox_counter->period_sum / prox_counter->period_count;
+                if (prox_counter->first_measurement) {
+                    /* Warmup: dùng chu kỳ đầu tiên để khởi động */
                     prox_counter->new_capture_ready = 1;
+                    prox_counter->first_measurement = 0;
+                } else {
+                    prox_counter->period_sum += period;
+                    prox_counter->period_count++;
                     
-                    // Reset for next averaging cycle
-                    prox_counter->period_sum = 0;
-                    prox_counter->period_count = 0;
+                    if (prox_counter->period_count >= prox_counter->averaging_samples) {
+                        prox_counter->difference = prox_counter->period_sum / prox_counter->period_count;
+                        prox_counter->new_capture_ready = 1;
+                        prox_counter->period_sum = 0;
+                        prox_counter->period_count = 0;
+                    }
                 }
             }
             
-            prox_counter->last_capture_time = HAL_GetTick();
-            prox_counter->ic_val1 = prox_counter->ic_val2;
+            /* Cập nhật anchor: lastTime = t (dùng cho chu kỳ tiếp theo) */
+            prox_counter->ic_val1 = current_val;
             prox_counter->overflow_count = 0;
+            prox_counter->last_capture_time = HAL_GetTick();
         }
     }
 }
